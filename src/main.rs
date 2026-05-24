@@ -1,5 +1,27 @@
 use std::{env, fs};
+use std::arch::x86_64::{__cpuid, _rdtsc};
 use std::collections::HashMap;
+
+fn rdtsc() -> u64 {
+    unsafe {
+        __cpuid(0);
+        _rdtsc()
+    }
+}
+
+struct CyclesStat {
+    cycles: u64,
+    label: String,
+}
+
+impl CyclesStat {
+    fn new(label: &str, cycles: u64) -> Self {
+        CyclesStat {
+            label: label.into(),
+            cycles
+        }
+    }
+}
 
 fn build_registers_table() -> HashMap<u8, String> {
     let mut table = HashMap::new();
@@ -27,12 +49,17 @@ fn build_registers_table() -> HashMap<u8, String> {
 }
 
 fn main() {
+    let mut cycles_stats = vec![];
+    cycles_stats.push(CyclesStat::new("program start", rdtsc()));
+
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         println!("Please provide a file name for an ASM to be decoded.");
         std::process::exit(1);
     }
     let asm_path = &args[1];
+
+    cycles_stats.push(CyclesStat::new("args read", rdtsc()));
 
     let op_code_mask = 0xFC;
     let d_mask = 0x02;
@@ -70,5 +97,12 @@ fn main() {
         }
     } else {
         println!("File not found");
+    }
+
+    cycles_stats.push(CyclesStat::new("inst. stream printed", rdtsc()));
+    let mut current_cycles = cycles_stats[0].cycles;
+    for c in &cycles_stats {
+        println!("{} {}", c.label, c.cycles - current_cycles);
+        current_cycles = c.cycles;
     }
 }
