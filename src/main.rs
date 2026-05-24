@@ -218,7 +218,7 @@ fn main() {
     cycles_stats.push(CyclesStat::new("inst. stream printed", rdtsc()));
     let mut current_cycles = cycles_stats[0].cycles;
     for c in &cycles_stats {
-        println!("{} {}", c.label, c.cycles - current_cycles);
+        eprintln!("{} {}", c.label, c.cycles - current_cycles);
         current_cycles = c.cycles;
     }
 }
