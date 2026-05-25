@@ -157,10 +157,13 @@ fn main() {
                     current += 4;
                 } else if mod_ == d8_mod {
                     // 8 bits displacement
-                    let low: u8 = asm_bytes[current + 2];
+                    let low: i8 = asm_bytes[current + 2] as i8;
 
                     let left = format!("{}", reg_str);
-                    let right = format!("[{} + {}]", rg_mem_table[&((mod_ >> 2) ^ rm)], low);
+                    let right = format!("[{} {} {}]",
+                                        rg_mem_table[&((mod_ >> 2) ^ rm)],
+                                        if low < 0 { "" } else { "+" },
+                                        low);
 
                     if d == 1 {
                         println!(" {}, {}", left, right);
@@ -172,8 +175,19 @@ fn main() {
                     // 16 bits displacement
                     let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
                     let high: u16 = (asm_bytes[current + 3] as u16) << 8;
+                    let value: i16 = (low ^ high) as i16;
 
-                    println!(" {}, [{} + {}]", reg_str, &rg_mem_table[&(rm)], low ^ high);
+                    let left = format!("{}", reg_str);
+                    let right = format!("[{} {} {}]",
+                                        &rg_mem_table[&(rm)],
+                                        if value < 0 { "" } else { "+" },
+                                        value);
+
+                    if d == 1 {
+                        println!(" {}, {}", left, right);
+                    } else {
+                        println!(" {}, {}", right, left);
+                    }
                     current += 4;
                 } else {
                     // no displacement
