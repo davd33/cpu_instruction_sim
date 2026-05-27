@@ -109,18 +109,23 @@ fn main() {
 
     cycles_stats.push(CyclesStat::new("args read", rdtsc()));
 
-    let op_code_mov_mask = 0xFC;
-    let op_code_immediate_mov_mask = 0xF0;
-    let mov_op_code = 0x88;
-    let mov_immediate_op_code = 0xB0;
+    let reg_mem_mask = 0xFC;
+    let reg_mem_opcode = 0x88;
+
+    let immediate_to_reg_mask = 0xF0;
+    let immediate_to_reg_opcode = 0xB0;
+
+    let immediate_to_reg_mem_mask = 0xFE;
+    let immediate_to_reg_mem_opcode = 0xC6;
 
     if let Ok(asm_bytes) = fs::read(asm_path) {
         let mut current = 0;
         let rg_table = mod11_registers_table();
         let rg_mem_table = reg_mem_registers_table();
+        let command = "MOV";
+
         while current < asm_bytes.len() {
-            if asm_bytes[current] & op_code_mov_mask == mov_op_code {
-                print!("MOV");
+            if asm_bytes[current] & reg_mem_mask == reg_mem_opcode {
                 let w_mask = 0x01;
                 let d_mask = 0x02;
                 let mod_mask = 0xC0;
@@ -143,9 +148,9 @@ fn main() {
                 if mod_ == reg_reg_mod {
                     // register to register move
                     if d == 1 {
-                        println!(" {}, {}", reg_str, rm_str);
+                        println!("{} {}, {}", command, reg_str, rm_str);
                     } else {
-                        println!(" {}, {}", rm_str, reg_str);
+                        println!("{} {}, {}", command, rm_str, reg_str);
                     }
                     current += 2;
                 } else if mod_ == direct_address_mod && rm == 0x06 {
@@ -153,7 +158,7 @@ fn main() {
                     let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
                     let high: u16 = (asm_bytes[current + 3] as u16) << 8;
                     let t = &rg_table[&((low ^ high) as u8)];
-                    println!(" {}, {}", reg_str, t);
+                    println!("{} {}, {}", command, reg_str, t);
                     current += 4;
                 } else if mod_ == d8_mod {
                     // 8 bits displacement
@@ -166,27 +171,27 @@ fn main() {
                                         low);
 
                     if d == 1 {
-                        println!(" {}, {}", left, right);
+                        println!("{} {}, {}", command, left, right);
                     } else {
-                        println!(" {}, {}", right, left);
+                        println!("{} {}, {}", command, right, left);
                     }
                     current += 3;
                 } else if mod_ == d16_mod {
                     // 16 bits displacement
                     let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
                     let high: u16 = (asm_bytes[current + 3] as u16) << 8;
-                    let value: i16 = (low ^ high) as i16;
+                    let displacement: i16 = (low ^ high) as i16;
 
                     let left = format!("{}", reg_str);
                     let right = format!("[{} {} {}]",
                                         &rg_mem_table[&(rm)],
-                                        if value < 0 { "" } else { "+" },
-                                        value);
+                                        if displacement < 0 { "" } else { "+" },
+                                        displacement);
 
                     if d == 1 {
-                        println!(" {}, {}", left, right);
+                        println!("{} {}, {}", command, left, right);
                     } else {
-                        println!(" {}, {}", right, left);
+                        println!("{} {}, {}", command, right, left);
                     }
                     current += 4;
                 } else {
@@ -195,15 +200,14 @@ fn main() {
                     let right = format!("[{}]", rg_mem_table[&(rm)]);
 
                     if d == 1 {
-                        println!(" {}, {}", left, right);
+                        println!("{} {}, {}", command, left, right);
                     } else {
-                        println!(" {}, {}", right, left);
+                        println!("{} {}, {}", command, right, left);
                     }
 
                     current += 2;
                 }
-            } else if asm_bytes[current] & op_code_immediate_mov_mask == mov_immediate_op_code {
-                print!("MOV");
+            } else if asm_bytes[current] & immediate_to_reg_mask == immediate_to_reg_opcode {
                 let w_mask = 0x08;
                 let reg_mask = 0x07;
 
@@ -220,9 +224,32 @@ fn main() {
                     low ^ high
                 };
 
-                println!(" {}, {} ", reg_str, data);
+                println!("{} {}, {} ", command, reg_str, data);
 
                 current += if w == 1 { 3 } else { 2 };
+            } else if asm_bytes[current] & immediate_to_reg_mem_mask == immediate_to_reg_mem_opcode {
+                let mod_mask = 0xC0;
+                let w_mask = 0x01;
+                let rm_mask = 0x07;
+
+                let mod_ = asm_bytes[current + 1] & mod_mask >> 6;
+                let w = asm_bytes[current] & w_mask;
+                let rm = asm_bytes[current + 1] & rm_mask;
+
+                let data = if w == 0x01 {
+                    asm_bytes[current + 2] as u16
+                } else {
+                    asm_bytes[current + 3] as u16
+                };
+
+                println!("{} {}, {} ", command, mod_, rm);
+
+                current += 3;
+                if w == 1 {
+                    current += 1;
+                }
+
+                // if displacement inc current too
             }
         }
     } else {
