@@ -115,6 +115,10 @@ fn main() {
     let immediate_to_reg_mask = 0xF0;
     let immediate_to_reg_opcode = 0xB0;
 
+    let mem_acc_mask = 0xFE;
+    let mem_acc_opcode = 0xA0;
+    let acc_mem_opcode = 0xA2;
+
     let immediate_to_reg_mem_mask = 0xFE;
     let immediate_to_reg_mem_opcode = 0xC6;
 
@@ -156,7 +160,7 @@ fn main() {
                     }
                     current += 2;
                 } else if mod_ == direct_address_mod && rm == 0x06 {
-                    // direct address NOT IMPLEMENTED
+                    // direct address
                     let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
                     let high: u16 = (asm_bytes[current + 3] as u16) << 8;
 
@@ -277,6 +281,20 @@ fn main() {
                 println!("{} {}, {} ", command, addr, data);
 
                 current += byte_inc;
+            } else if asm_bytes[current] & mem_acc_mask == mem_acc_opcode {
+                // 16 bits displacement
+                let low: u16 = asm_bytes[current + 1] as u16 & 0x00FF;
+                let high: u16 = (asm_bytes[current + 2] as u16) << 8;
+                let displacement: i16 = (low ^ high) as i16;
+                println!("{} ax, [{}]", command, displacement);
+                current += 3;
+            } else if asm_bytes[current] & mem_acc_mask == acc_mem_opcode {
+                // 16 bits displacement
+                let low: u16 = asm_bytes[current + 1] as u16 & 0x00FF;
+                let high: u16 = (asm_bytes[current + 2] as u16) << 8;
+                let displacement: i16 = (low ^ high) as i16;
+                println!("{} [{}], ax", command, displacement);
+                current += 3;
             }
         }
     } else {
