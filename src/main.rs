@@ -124,6 +124,12 @@ fn main() {
         let rg_mem_table = reg_mem_registers_table();
         let command = "MOV";
 
+        // MOD values inplace
+        let reg_reg_mod = 0xC0;
+        let direct_address_mod = 0x00;
+        let d8_mod = 0x40;
+        let d16_mod = 0x80;
+
         while current < asm_bytes.len() {
             if asm_bytes[current] & reg_mem_mask == reg_mem_opcode {
                 let w_mask = 0x01;
@@ -131,10 +137,6 @@ fn main() {
                 let mod_mask = 0xC0;
                 let reg_mask = 0x38;
                 let rm_mask = 0x07;
-                let reg_reg_mod = 0xC0;
-                let direct_address_mod = 0x00;
-                let d8_mod = 0x40;
-                let d16_mod = 0x80;
 
                 let rm = asm_bytes[current + 1] & rm_mask;
                 let reg = (asm_bytes[current + 1] & reg_mask) >> 3;
@@ -232,24 +234,49 @@ fn main() {
                 let w_mask = 0x01;
                 let rm_mask = 0x07;
 
-                let mod_ = asm_bytes[current + 1] & mod_mask >> 6;
+                let mod_ = asm_bytes[current + 1] & mod_mask;
                 let w = asm_bytes[current] & w_mask;
                 let rm = asm_bytes[current + 1] & rm_mask;
 
-                let data = if w == 0x01 {
-                    asm_bytes[current + 2] as u16
+                let has_d8 = mod_ == d8_mod;
+                let has_d16 = mod_ == d16_mod;
+
+                let mut byte_inc = 2;
+                let data_pos = if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
+                let data = if w == 0x00 {
+                    byte_inc += 1;
+
+                    format!("byte {}", asm_bytes[current + 2 + data_pos])
                 } else {
-                    asm_bytes[current + 3] as u16
+                    byte_inc += 2;
+
+                    format!("word {}", (asm_bytes[current + 2 + data_pos] as u16) ^
+                        ((asm_bytes[current + 3 + data_pos] as u16) << 8))
                 };
 
-                println!("{} {}, {} ", command, mod_, rm);
+                let addr: String = if mod_ == d8_mod {
+                    byte_inc += 1;
+                    let displacement: i8 = asm_bytes[current + 2] as i8;
+                    format!("[{} {} {}]",
+                            rg_mem_table[&((mod_ >> 2) ^ rm)],
+                            if displacement < 0 { "" } else { "+" },
+                            displacement)
+                } else if mod_ == d16_mod {
+                    byte_inc += 2;
+                    let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
+                    let high: u16 = (asm_bytes[current + 3] as u16) << 8;
+                    let displacement: i16 = (low ^ high) as i16;
+                    format!("[{} {} {}]",
+                            &rg_mem_table[&(rm)],
+                            if displacement < 0 { "" } else { "+" },
+                            displacement)
+                } else {
+                    format!("[{}]", rg_mem_table[&(rm)])
+                };
 
-                current += 3;
-                if w == 1 {
-                    current += 1;
-                }
+                println!("{} {}, {} ", command, addr, data);
 
-                // if displacement inc current too
+                current += byte_inc;
             }
         }
     } else {
