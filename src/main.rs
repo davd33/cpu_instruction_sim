@@ -159,8 +159,8 @@ fn main() {
                     // direct address NOT IMPLEMENTED
                     let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
                     let high: u16 = (asm_bytes[current + 3] as u16) << 8;
-                    let t = &rg_table[&((low ^ high) as u8)];
-                    println!("{} {}, {}", command, reg_str, t);
+
+                    println!("{} {}, [{}]", command, reg_str, low ^ high);
                     current += 4;
                 } else if mod_ == d8_mod {
                     // 8 bits displacement
