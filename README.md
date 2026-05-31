@@ -20,3 +20,5 @@ diff /d/Code/cpu_instruction_sim/output "$ASM_BINARY"
 ```
 
 Diff should not output any error.
+
+For linux, you can also use the `test.sh` bash file (don't forget to build before).
