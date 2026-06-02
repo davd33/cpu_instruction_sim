@@ -11,6 +11,9 @@ function test_asm() {
   diff output "$ASM_BINARY" && echo "OK" || echo "KO"
 }
 
+# build executable
+cargo build
+
 # change the path below to the file to be tested
 export ASM_BINARY='asm/mov_mem_to_reg/simple'
 test_asm

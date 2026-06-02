@@ -96,6 +96,14 @@ fn reg_mem_registers_table() -> HashMap<u8, String> {
     table
 }
 
+fn d16_displacement(low: u8, high: u8) -> u16 {
+    ((low as u16) & 0x00FF) ^ ((high as u16) << 8)
+}
+
+fn d16_signed_displacement(low: u8, high: u8) -> i16 {
+    d16_displacement(low, high) as i16
+}
+
 fn main() {
     let mut cycles_stats = vec![];
     cycles_stats.push(CyclesStat::new("program start", rdtsc()));
@@ -152,7 +160,6 @@ fn main() {
                 let rm_str = &rg_table[&(w << 3 | rm)];
 
                 if mod_ == reg_reg_mod {
-                    // register to register move
                     if d == 1 {
                         println!("{} {}, {}", command, reg_str, rm_str);
                     } else {
@@ -160,21 +167,19 @@ fn main() {
                     }
                     current += 2;
                 } else if mod_ == direct_address_mod && rm == 0x06 {
-                    // direct address
-                    let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
-                    let high: u16 = (asm_bytes[current + 3] as u16) << 8;
+                    // DIRECT ADDRESS
+                    let disp: u16 = d16_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
-                    println!("{} {}, [{}]", command, reg_str, low ^ high);
+                    println!("{} {}, [{}]", command, reg_str, disp);
                     current += 4;
                 } else if mod_ == d8_mod {
-                    // 8 bits displacement
-                    let low: i8 = asm_bytes[current + 2] as i8;
+                    let disp: i8 = asm_bytes[current + 2] as i8;
 
                     let left = format!("{}", reg_str);
                     let right = format!("[{} {} {}]",
                                         rg_mem_table[&((mod_ >> 2) ^ rm)],
-                                        if low < 0 { "" } else { "+" },
-                                        low);
+                                        if disp < 0 { "" } else { "+" },
+                                        disp);
 
                     if d == 1 {
                         println!("{} {}, {}", command, left, right);
@@ -183,16 +188,13 @@ fn main() {
                     }
                     current += 3;
                 } else if mod_ == d16_mod {
-                    // 16 bits displacement
-                    let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
-                    let high: u16 = (asm_bytes[current + 3] as u16) << 8;
-                    let displacement: i16 = (low ^ high) as i16;
+                    let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
                     let left = format!("{}", reg_str);
                     let right = format!("[{} {} {}]",
                                         &rg_mem_table[&(rm)],
-                                        if displacement < 0 { "" } else { "+" },
-                                        displacement);
+                                        if disp < 0 { "" } else { "+" },
+                                        disp);
 
                     if d == 1 {
                         println!("{} {}, {}", command, left, right);
@@ -224,10 +226,7 @@ fn main() {
                 let data: u16 = if w == 0 {
                     asm_bytes[current + 1] as u16
                 } else {
-                    let low: u16 = (asm_bytes[current + 1] as u16) & 0x00FF;
-                    let high: u16 = (asm_bytes[current + 2] as u16) << 8;
-
-                    low ^ high
+                    d16_displacement(asm_bytes[current + 1], asm_bytes[current + 2])
                 };
 
                 println!("{} {}, {} ", command, reg_str, data);
@@ -254,26 +253,25 @@ fn main() {
                 } else {
                     byte_inc += 2;
 
-                    format!("word {}", (asm_bytes[current + 2 + data_pos] as u16) ^
-                        ((asm_bytes[current + 3 + data_pos] as u16) << 8))
+                    format!("word {}", d16_displacement(
+                        asm_bytes[current + 2 + data_pos],
+                        asm_bytes[current + 3 + data_pos]))
                 };
 
                 let addr: String = if mod_ == d8_mod {
                     byte_inc += 1;
-                    let displacement: i8 = asm_bytes[current + 2] as i8;
+                    let disp: i8 = asm_bytes[current + 2] as i8;
                     format!("[{} {} {}]",
                             rg_mem_table[&((mod_ >> 2) ^ rm)],
-                            if displacement < 0 { "" } else { "+" },
-                            displacement)
+                            if disp < 0 { "" } else { "+" },
+                            disp)
                 } else if mod_ == d16_mod {
                     byte_inc += 2;
-                    let low: u16 = asm_bytes[current + 2] as u16 & 0x00FF;
-                    let high: u16 = (asm_bytes[current + 3] as u16) << 8;
-                    let displacement: i16 = (low ^ high) as i16;
+                    let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
                     format!("[{} {} {}]",
                             &rg_mem_table[&(rm)],
-                            if displacement < 0 { "" } else { "+" },
-                            displacement)
+                            if disp < 0 { "" } else { "+" },
+                            disp)
                 } else {
                     format!("[{}]", rg_mem_table[&(rm)])
                 };
@@ -282,18 +280,12 @@ fn main() {
 
                 current += byte_inc;
             } else if asm_bytes[current] & mem_acc_mask == mem_acc_opcode {
-                // 16 bits displacement
-                let low: u16 = asm_bytes[current + 1] as u16 & 0x00FF;
-                let high: u16 = (asm_bytes[current + 2] as u16) << 8;
-                let displacement: i16 = (low ^ high) as i16;
-                println!("{} ax, [{}]", command, displacement);
+                let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
+                println!("{} ax, [{}]", command, disp);
                 current += 3;
             } else if asm_bytes[current] & mem_acc_mask == acc_mem_opcode {
-                // 16 bits displacement
-                let low: u16 = asm_bytes[current + 1] as u16 & 0x00FF;
-                let high: u16 = (asm_bytes[current + 2] as u16) << 8;
-                let displacement: i16 = (low ^ high) as i16;
-                println!("{} [{}], ax", command, displacement);
+                let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
+                println!("{} [{}], ax", command, disp);
                 current += 3;
             }
         }
