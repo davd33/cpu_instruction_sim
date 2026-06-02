@@ -1,6 +1,7 @@
 use std::arch::x86_64::{__cpuid, _rdtsc};
 use std::collections::HashMap;
 use std::{env, fs};
+use std::process::exit;
 
 fn rdtsc() -> u64 {
     unsafe {
@@ -104,6 +105,47 @@ fn d16_signed_displacement(low: u8, high: u8) -> i16 {
     d16_displacement(low, high) as i16
 }
 
+fn which_command(byte1: u8, byte2: u8) -> Option<String> {
+    let mov_ids = vec![
+        (0xFC, 0x88), // Reg/mem
+        (0xFE, 0xC6), // Immediate reg/mem
+        (0xF0, 0xB0), // Immediate reg
+        (0xFE, 0xA0), // Mem/acc
+        (0xFE, 0xA2), // Acc/mem
+    ];
+    let add_ids = vec![
+        (0xFC, 0x00), // Reg/mem
+        (0xFC, 0x80), // Immediate reg/mem
+        (0xFE, 0x2C), // Immediate acc
+    ];
+    let sub_ids = vec![
+        (0xFC, 0x28), // Reg/mem
+        (0xFC, 0x80), // Immediate reg/mem
+        (0xFE, 0x2C), // Immediate acc
+    ];
+    let cmp_ids = vec![
+        (0xFC, 0x38), // Reg/mem
+        (0xFC, 0x80), // Immediate reg/mem
+        (0xFE, 0x3C), // Immediate acc
+    ];
+
+    let mut commands = HashMap::new();
+    commands.insert("MOV", mov_ids);
+    commands.insert("ADD", add_ids);
+    commands.insert("SUB", sub_ids);
+    commands.insert("CMP", cmp_ids);
+
+    for (k, v) in commands {
+        for (mask, opcode) in v {
+            if byte1 & mask == opcode {
+                return Some(k.into());
+            }
+        }
+    }
+
+    None
+}
+
 fn main() {
     let mut cycles_stats = vec![];
     cycles_stats.push(CyclesStat::new("program start", rdtsc()));
@@ -111,7 +153,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         println!("Please provide a file name for an ASM to be decoded.");
-        std::process::exit(1);
+        exit(1);
     }
     let asm_path = &args[1];
 
@@ -134,7 +176,13 @@ fn main() {
         let mut current = 0;
         let rg_table = mod11_registers_table();
         let rg_mem_table = reg_mem_registers_table();
-        let command = "MOV";
+        let command = match which_command(asm_bytes[current], asm_bytes[current + 1]) {
+            None => {
+                println!("No such instruction: {:b}", asm_bytes[current]);
+                exit(1);
+            }
+            Some(cmd) => cmd
+        };
 
         // MOD values inplace
         let reg_reg_mod = 0xC0;
