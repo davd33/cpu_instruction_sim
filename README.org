@@ -1,8 +1,10 @@
-# cpu_instruction_sim
+* cpu_instruction_sim
 
-## 8086 Instructions
+** 8086 Instructions
 
-```
+*** Instructions encoding
+
+#+begin_src shell
 MOV
 1 0 0 0 1 0 D W                   # Reg/mem with reg
 1 1 0 0 0 1 1 W | _ _ 0 0 0 _ _ _ # Immediate reg/mem
@@ -21,16 +23,18 @@ CMP
 0 0 1 1 1 0 D W                   # Reg/mem and reg
 1 0 0 0 0 0 S W | _ _ 1 1 1 _ _ _ # Immediate with reg/mem
 0 0 1 1 1 1 0 W                   # Immediate with acc
-```
+#+end_src
 
-## Test
+The add, sub and cmp instructions have the =S= flag to extend =8-bit= immediate data to =16-bits= if =W equals 1=.
+
+** Test
 
 To compare results between my 8086 instructions parser and NASM's compiled ones,
 run the following commands in GIT Bash.
 
 First run program with the asm binary file path as argument:
 
-```bash
+#+begin_src shell
 # change the path below to the file to be tested
 export ASM_BINARY='/d/Code/cpu_instruction_sim/asm/mov_mem_to_reg/hard' 
 /d/Code/cpu_instruction_sim/target/debug/cpu-instruction-sim.exe \
@@ -42,8 +46,8 @@ cd /c/Program\ Files/NASM/
 
 # Then compare with diff:
 diff /d/Code/cpu_instruction_sim/output "$ASM_BINARY" 
-```
+#+end_src
 
-Diff should not output any error.
+*Diff should not output any error.*
 
-For linux, you can also use the `test.sh` bash file (don't forget to build before).
+For linux, you can also use the =test.sh= bash file (don't forget to build before).

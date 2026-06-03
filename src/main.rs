@@ -1,5 +1,6 @@
 use std::arch::x86_64::{__cpuid, _rdtsc};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::{env, fs};
 use std::process::exit;
 
@@ -22,6 +23,31 @@ impl CyclesStat {
             cycles
         }
     }
+}
+
+#[derive(Eq, PartialEq, Hash)]
+enum Command {
+    MOV, ADD, SUB, CMP,
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Command::MOV => "MOV",
+            Command::ADD => "ADD",
+            Command::SUB => "SUB",
+            Command::CMP => "CMP",
+        })
+    }
+}
+
+#[derive(Eq, Hash, PartialEq)]
+enum InstType {
+    RegMem,
+    ImmediateRegMem,
+    ImmediateReg,
+    MemAcc,
+    AccMem,
 }
 
 /// The returned table's keys encode a one byte value as follows:
@@ -105,40 +131,39 @@ fn d16_signed_displacement(low: u8, high: u8) -> i16 {
     d16_displacement(low, high) as i16
 }
 
-fn which_command(byte1: u8, byte2: u8) -> Option<String> {
-    let mov_ids = vec![
-        (0xFC, 0x88), // Reg/mem
-        (0xFE, 0xC6), // Immediate reg/mem
-        (0xF0, 0xB0), // Immediate reg
-        (0xFE, 0xA0), // Mem/acc
-        (0xFE, 0xA2), // Acc/mem
-    ];
-    let add_ids = vec![
-        (0xFC, 0x00), // Reg/mem
-        (0xFC, 0x80), // Immediate reg/mem
-        (0xFE, 0x2C), // Immediate acc
-    ];
-    let sub_ids = vec![
-        (0xFC, 0x28), // Reg/mem
-        (0xFC, 0x80), // Immediate reg/mem
-        (0xFE, 0x2C), // Immediate acc
-    ];
-    let cmp_ids = vec![
-        (0xFC, 0x38), // Reg/mem
-        (0xFC, 0x80), // Immediate reg/mem
-        (0xFE, 0x3C), // Immediate acc
-    ];
+fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, String)> {
+    let mut mov_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
+    mov_ids.insert(InstType::RegMem, (0xFC, 0x88)); // Reg/mem
+    mov_ids.insert(InstType::ImmediateRegMem, (0xFE, 0xC6)); // Immediate reg/mem
+    mov_ids.insert(InstType::ImmediateReg, (0xF0, 0xB0)); // Immediate reg
+    mov_ids.insert(InstType::MemAcc, (0xFE, 0xA0)); // Mem/acc
+    mov_ids.insert(InstType::AccMem, (0xFE, 0xA2)); // Acc/mem
+
+    let mut add_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
+    add_ids.insert(InstType::RegMem, (0xFC, 0x00)); // Reg/mem
+    add_ids.insert(InstType::ImmediateRegMem, (0xFC, 0x80)); // Immediate reg/mem
+    add_ids.insert(InstType::ImmediateReg, (0xFE, 0x2C)); // Immediate acc
+
+    let mut sub_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
+    sub_ids.insert(InstType::RegMem, (0xFC, 0x28)); // Reg/mem
+    sub_ids.insert(InstType::ImmediateRegMem, (0xFC, 0x80)); // Immediate reg/mem
+    sub_ids.insert(InstType::ImmediateReg, (0xFE, 0x2C)); // Immediate acc
+
+    let mut cmp_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
+    cmp_ids.insert(InstType::RegMem, (0xFC, 0x38)); // Reg/mem
+    cmp_ids.insert(InstType::ImmediateRegMem, (0xFC, 0x80)); // Immediate reg/mem
+    cmp_ids.insert(InstType::ImmediateReg, (0xFE, 0x3C)); // Immediate acc
 
     let mut commands = HashMap::new();
-    commands.insert("MOV", mov_ids);
-    commands.insert("ADD", add_ids);
-    commands.insert("SUB", sub_ids);
-    commands.insert("CMP", cmp_ids);
+    commands.insert(Command::MOV, mov_ids);
+    commands.insert(Command::ADD, add_ids);
+    commands.insert(Command::SUB, sub_ids);
+    commands.insert(Command::CMP, cmp_ids);
 
     for (k, v) in commands {
-        for (mask, opcode) in v {
-            if byte1 & mask == opcode {
-                return Some(k.into());
+        for (inst_type, (mask, opcode)) in v {
+            if (byte1 & mask) == opcode {
+                return Some((inst_type, k.to_string()));
             }
         }
     }
@@ -159,30 +184,10 @@ fn main() {
 
     cycles_stats.push(CyclesStat::new("args read", rdtsc()));
 
-    let reg_mem_mask = 0xFC;
-    let reg_mem_opcode = 0x88;
-
-    let immediate_to_reg_mask = 0xF0;
-    let immediate_to_reg_opcode = 0xB0;
-
-    let mem_acc_mask = 0xFE;
-    let mem_acc_opcode = 0xA0;
-    let acc_mem_opcode = 0xA2;
-
-    let immediate_to_reg_mem_mask = 0xFE;
-    let immediate_to_reg_mem_opcode = 0xC6;
-
     if let Ok(asm_bytes) = fs::read(asm_path) {
         let mut current = 0;
         let rg_table = mod11_registers_table();
         let rg_mem_table = reg_mem_registers_table();
-        let command = match which_command(asm_bytes[current], asm_bytes[current + 1]) {
-            None => {
-                println!("No such instruction: {:b}", asm_bytes[current]);
-                exit(1);
-            }
-            Some(cmd) => cmd
-        };
 
         // MOD values inplace
         let reg_reg_mod = 0xC0;
@@ -191,150 +196,164 @@ fn main() {
         let d16_mod = 0x80;
 
         while current < asm_bytes.len() {
-            if asm_bytes[current] & reg_mem_mask == reg_mem_opcode {
-                let w_mask = 0x01;
-                let d_mask = 0x02;
-                let mod_mask = 0xC0;
-                let reg_mask = 0x38;
-                let rm_mask = 0x07;
-
-                let rm = asm_bytes[current + 1] & rm_mask;
-                let reg = (asm_bytes[current + 1] & reg_mask) >> 3;
-                let mod_ = asm_bytes[current + 1] & mod_mask;
-                let d = (asm_bytes[current] & d_mask) >> 1;
-                let w = asm_bytes[current] & w_mask;
-
-                let reg_str = &rg_table[&(w << 3 | reg)];
-                let rm_str = &rg_table[&(w << 3 | rm)];
-
-                if mod_ == reg_reg_mod {
-                    if d == 1 {
-                        println!("{} {}, {}", command, reg_str, rm_str);
-                    } else {
-                        println!("{} {}, {}", command, rm_str, reg_str);
-                    }
-                    current += 2;
-                } else if mod_ == direct_address_mod && rm == 0x06 {
-                    // DIRECT ADDRESS
-                    let disp: u16 = d16_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
-
-                    println!("{} {}, [{}]", command, reg_str, disp);
-                    current += 4;
-                } else if mod_ == d8_mod {
-                    let disp: i8 = asm_bytes[current + 2] as i8;
-
-                    let left = format!("{}", reg_str);
-                    let right = format!("[{} {} {}]",
-                                        rg_mem_table[&((mod_ >> 2) ^ rm)],
-                                        if disp < 0 { "" } else { "+" },
-                                        disp);
-
-                    if d == 1 {
-                        println!("{} {}, {}", command, left, right);
-                    } else {
-                        println!("{} {}, {}", command, right, left);
-                    }
-                    current += 3;
-                } else if mod_ == d16_mod {
-                    let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
-
-                    let left = format!("{}", reg_str);
-                    let right = format!("[{} {} {}]",
-                                        &rg_mem_table[&(rm)],
-                                        if disp < 0 { "" } else { "+" },
-                                        disp);
-
-                    if d == 1 {
-                        println!("{} {}, {}", command, left, right);
-                    } else {
-                        println!("{} {}, {}", command, right, left);
-                    }
-                    current += 4;
-                } else {
-                    // no displacement
-                    let left = format!("{}", reg_str);
-                    let right = format!("[{}]", rg_mem_table[&(rm)]);
-
-                    if d == 1 {
-                        println!("{} {}, {}", command, left, right);
-                    } else {
-                        println!("{} {}, {}", command, right, left);
-                    }
-
-                    current += 2;
+            let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1]) {
+                None => {
+                    println!("No such instruction: {:b}", asm_bytes[current]);
+                    exit(1);
                 }
-            } else if asm_bytes[current] & immediate_to_reg_mask == immediate_to_reg_opcode {
-                let w_mask = 0x08;
-                let reg_mask = 0x07;
+                Some(cmd) => cmd
+            };
 
-                let w = (asm_bytes[current] & w_mask) >> 3;
-                let reg = asm_bytes[current] & reg_mask;
-                let reg_str = &rg_table[&(w << 3 | reg)];
+            match inst_type {
+                InstType::RegMem => {
+                    let w_mask = 0x01;
+                    let d_mask = 0x02;
+                    let mod_mask = 0xC0;
+                    let reg_mask = 0x38;
+                    let rm_mask = 0x07;
 
-                let data: u16 = if w == 0 {
-                    asm_bytes[current + 1] as u16
-                } else {
-                    d16_displacement(asm_bytes[current + 1], asm_bytes[current + 2])
-                };
+                    let rm = asm_bytes[current + 1] & rm_mask;
+                    let reg = (asm_bytes[current + 1] & reg_mask) >> 3;
+                    let mod_ = asm_bytes[current + 1] & mod_mask;
+                    let d = (asm_bytes[current] & d_mask) >> 1;
+                    let w = asm_bytes[current] & w_mask;
 
-                println!("{} {}, {} ", command, reg_str, data);
+                    let reg_str = &rg_table[&(w << 3 | reg)];
+                    let rm_str = &rg_table[&(w << 3 | rm)];
 
-                current += if w == 1 { 3 } else { 2 };
-            } else if asm_bytes[current] & immediate_to_reg_mem_mask == immediate_to_reg_mem_opcode {
-                let mod_mask = 0xC0;
-                let w_mask = 0x01;
-                let rm_mask = 0x07;
+                    if mod_ == reg_reg_mod {
+                        if d == 1 {
+                            println!("{} {}, {}", command, reg_str, rm_str);
+                        } else {
+                            println!("{} {}, {}", command, rm_str, reg_str);
+                        }
+                        current += 2;
+                    } else if mod_ == direct_address_mod && rm == 0x06 {
+                        // DIRECT ADDRESS
+                        let disp: u16 = d16_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
-                let mod_ = asm_bytes[current + 1] & mod_mask;
-                let w = asm_bytes[current] & w_mask;
-                let rm = asm_bytes[current + 1] & rm_mask;
+                        println!("{} {}, [{}]", command, reg_str, disp);
+                        current += 4;
+                    } else if mod_ == d8_mod {
+                        let disp: i8 = asm_bytes[current + 2] as i8;
 
-                let has_d8 = mod_ == d8_mod;
-                let has_d16 = mod_ == d16_mod;
+                        let left = format!("{}", reg_str);
+                        let right = format!("[{} {} {}]",
+                                            rg_mem_table[&((mod_ >> 2) ^ rm)],
+                                            if disp < 0 { "" } else { "+" },
+                                            disp);
 
-                let mut byte_inc = 2;
-                let data_pos = if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
-                let data = if w == 0x00 {
-                    byte_inc += 1;
+                        if d == 1 {
+                            println!("{} {}, {}", command, left, right);
+                        } else {
+                            println!("{} {}, {}", command, right, left);
+                        }
+                        current += 3;
+                    } else if mod_ == d16_mod {
+                        let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
-                    format!("byte {}", asm_bytes[current + 2 + data_pos])
-                } else {
-                    byte_inc += 2;
+                        let left = format!("{}", reg_str);
+                        let right = format!("[{} {} {}]",
+                                            &rg_mem_table[&(rm)],
+                                            if disp < 0 { "" } else { "+" },
+                                            disp);
 
-                    format!("word {}", d16_displacement(
-                        asm_bytes[current + 2 + data_pos],
-                        asm_bytes[current + 3 + data_pos]))
-                };
+                        if d == 1 {
+                            println!("{} {}, {}", command, left, right);
+                        } else {
+                            println!("{} {}, {}", command, right, left);
+                        }
+                        current += 4;
+                    } else {
+                        // no displacement
+                        let left = format!("{}", reg_str);
+                        let right = format!("[{}]", rg_mem_table[&(rm)]);
 
-                let addr: String = if mod_ == d8_mod {
-                    byte_inc += 1;
-                    let disp: i8 = asm_bytes[current + 2] as i8;
-                    format!("[{} {} {}]",
-                            rg_mem_table[&((mod_ >> 2) ^ rm)],
-                            if disp < 0 { "" } else { "+" },
-                            disp)
-                } else if mod_ == d16_mod {
-                    byte_inc += 2;
-                    let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
-                    format!("[{} {} {}]",
-                            &rg_mem_table[&(rm)],
-                            if disp < 0 { "" } else { "+" },
-                            disp)
-                } else {
-                    format!("[{}]", rg_mem_table[&(rm)])
-                };
+                        if d == 1 {
+                            println!("{} {}, {}", command, left, right);
+                        } else {
+                            println!("{} {}, {}", command, right, left);
+                        }
 
-                println!("{} {}, {} ", command, addr, data);
+                        current += 2;
+                    }
+                },
+                InstType::ImmediateRegMem => {
+                    let mod_mask = 0xC0;
+                    let w_mask = 0x01;
+                    let rm_mask = 0x07;
 
-                current += byte_inc;
-            } else if asm_bytes[current] & mem_acc_mask == mem_acc_opcode {
-                let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
-                println!("{} ax, [{}]", command, disp);
-                current += 3;
-            } else if asm_bytes[current] & mem_acc_mask == acc_mem_opcode {
-                let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
-                println!("{} [{}], ax", command, disp);
-                current += 3;
+                    let mod_ = asm_bytes[current + 1] & mod_mask;
+                    let w = asm_bytes[current] & w_mask;
+                    let rm = asm_bytes[current + 1] & rm_mask;
+
+                    let has_d8 = mod_ == d8_mod;
+                    let has_d16 = mod_ == d16_mod;
+
+                    let mut byte_inc = 2;
+                    let data_pos = if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
+                    let data = if w == 0x00 {
+                        byte_inc += 1;
+
+                        format!("byte {}", asm_bytes[current + 2 + data_pos])
+                    } else {
+                        byte_inc += 2;
+
+                        format!("word {}", d16_displacement(
+                            asm_bytes[current + 2 + data_pos],
+                            asm_bytes[current + 3 + data_pos]))
+                    };
+
+                    let addr: String = if mod_ == d8_mod {
+                        byte_inc += 1;
+                        let disp: i8 = asm_bytes[current + 2] as i8;
+                        format!("[{} {} {}]",
+                                rg_mem_table[&((mod_ >> 2) ^ rm)],
+                                if disp < 0 { "" } else { "+" },
+                                disp)
+                    } else if mod_ == d16_mod {
+                        byte_inc += 2;
+                        let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
+                        format!("[{} {} {}]",
+                                &rg_mem_table[&(rm)],
+                                if disp < 0 { "" } else { "+" },
+                                disp)
+                    } else {
+                        format!("[{}]", rg_mem_table[&(rm)])
+                    };
+
+                    println!("{} {}, {} ", command, addr, data);
+
+                    current += byte_inc;
+                },
+                InstType::ImmediateReg => {
+                    let w_mask = 0x08;
+                    let reg_mask = 0x07;
+
+                    let w = (asm_bytes[current] & w_mask) >> 3;
+                    let reg = asm_bytes[current] & reg_mask;
+                    let reg_str = &rg_table[&(w << 3 | reg)];
+
+                    let data: u16 = if w == 0 {
+                        asm_bytes[current + 1] as u16
+                    } else {
+                        d16_displacement(asm_bytes[current + 1], asm_bytes[current + 2])
+                    };
+
+                    println!("{} {}, {} ", command, reg_str, data);
+
+                    current += if w == 1 { 3 } else { 2 };
+                },
+                InstType::MemAcc => {
+                    let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
+                    println!("{} ax, [{}]", command, disp);
+                    current += 3;
+                },
+                InstType::AccMem => {
+                    let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
+                    println!("{} [{}], ax", command, disp);
+                    current += 3;
+                },
             }
         }
     } else {
