@@ -132,38 +132,49 @@ fn d16_signed_displacement(low: u8, high: u8) -> i16 {
 }
 
 fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, String)> {
-    let mut mov_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
-    mov_ids.insert(InstType::RegMem, (0xFC, 0x88)); // Reg/mem
-    mov_ids.insert(InstType::ImmediateRegMem, (0xFE, 0xC6)); // Immediate reg/mem
-    mov_ids.insert(InstType::ImmediateReg, (0xF0, 0xB0)); // Immediate reg
-    mov_ids.insert(InstType::MemAcc, (0xFE, 0xA0)); // Mem/acc
-    mov_ids.insert(InstType::AccMem, (0xFE, 0xA2)); // Acc/mem
+    let mut mov_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
+    mov_ids.insert(InstType::RegMem, vec![(0xFC, 0x88)]); // Reg/mem
+    mov_ids.insert(InstType::ImmediateRegMem, vec![(0xFE, 0xC6)]); // Immediate reg/mem
+    mov_ids.insert(InstType::ImmediateReg, vec![(0xF0, 0xB0)]); // Immediate reg
+    mov_ids.insert(InstType::MemAcc, vec![(0xFE, 0xA0)]); // Mem/acc
+    mov_ids.insert(InstType::AccMem, vec![(0xFE, 0xA2)]); // Acc/mem
 
-    let mut add_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
-    add_ids.insert(InstType::RegMem, (0xFC, 0x00)); // Reg/mem
-    add_ids.insert(InstType::ImmediateRegMem, (0xFC, 0x80)); // Immediate reg/mem
-    add_ids.insert(InstType::ImmediateReg, (0xFE, 0x2C)); // Immediate acc
+    let mut add_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
+    add_ids.insert(InstType::RegMem, vec![(0xFC, 0x00)]); // Reg/mem
+    add_ids.insert(InstType::ImmediateRegMem, vec![(0xFC, 0x80), (0x38, 0x00)]); // Immediate reg/mem
+    add_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x2C)]); // Immediate acc
 
-    let mut sub_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
-    sub_ids.insert(InstType::RegMem, (0xFC, 0x28)); // Reg/mem
-    sub_ids.insert(InstType::ImmediateRegMem, (0xFC, 0x80)); // Immediate reg/mem
-    sub_ids.insert(InstType::ImmediateReg, (0xFE, 0x2C)); // Immediate acc
+    let mut sub_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
+    sub_ids.insert(InstType::RegMem, vec![(0xFC, 0x28)]); // Reg/mem
+    sub_ids.insert(InstType::ImmediateRegMem, vec![(0xFC, 0x80), (0x38, 0x28)]); // Immediate reg/mem
+    sub_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x2C)]); // Immediate acc
 
-    let mut cmp_ids: HashMap<InstType, (u8, u8)> = HashMap::new();
-    cmp_ids.insert(InstType::RegMem, (0xFC, 0x38)); // Reg/mem
-    cmp_ids.insert(InstType::ImmediateRegMem, (0xFC, 0x80)); // Immediate reg/mem
-    cmp_ids.insert(InstType::ImmediateReg, (0xFE, 0x3C)); // Immediate acc
+    let mut cmp_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
+    cmp_ids.insert(InstType::RegMem, vec![(0xFC, 0x38)]); // Reg/mem
+    cmp_ids.insert(InstType::ImmediateRegMem, vec![(0xFC, 0x80), (0x38, 0x38)]); // Immediate reg/mem
+    cmp_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x3C)]); // Immediate acc
 
-    let mut commands = HashMap::new();
+    let mut commands: HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>> = HashMap::new();
     commands.insert(Command::MOV, mov_ids);
     commands.insert(Command::ADD, add_ids);
     commands.insert(Command::SUB, sub_ids);
     commands.insert(Command::CMP, cmp_ids);
 
     for (k, v) in commands {
-        for (inst_type, (mask, opcode)) in v {
-            if (byte1 & mask) == opcode {
-                return Some((inst_type, k.to_string()));
+        for (inst_type, decoder) in v {
+            assert!(decoder.len() >= 1 && decoder.len() <= 2, "Instruction decoder must have 1, 2 elements.");
+            if let Some((mask, opcode)) = decoder.first() {
+                if decoder.len() == 2 {
+                    if let Some((mask2, opcode2)) = decoder.get(1) {
+                        if ((byte1 & mask) == *opcode) && ((byte2 & mask2) == *opcode2) {
+                            return Some((inst_type, k.to_string()));
+                        }
+                    }
+                } else {
+                    if (byte1 & mask) == *opcode {
+                        return Some((inst_type, k.to_string()));
+                    }
+                }
             }
         }
     }
@@ -198,7 +209,7 @@ fn main() {
         while current < asm_bytes.len() {
             let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1]) {
                 None => {
-                    println!("No such instruction: {:b}", asm_bytes[current]);
+                    print_current_byte(&asm_bytes, current);
                     exit(1);
                 }
                 Some(cmd) => cmd
@@ -366,4 +377,11 @@ fn main() {
         eprintln!("{} {}", c.label, c.cycles - current_cycles);
         current_cycles = c.cycles;
     }
+}
+
+fn print_current_byte(asm_bytes: &Vec<u8>, current: usize) {
+    println!("No such instruction, ADDR {:02X}/{:02X} = {:02X} ({:08b}) {:02X} ({:08b})",
+             current / 16, current % 16,
+             asm_bytes[current], asm_bytes[current],
+             asm_bytes[current + 1], asm_bytes[current + 1]);
 }
