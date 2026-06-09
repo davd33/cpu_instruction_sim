@@ -205,6 +205,7 @@ fn main() {
         let direct_address_mod = 0x00;
         let d8_mod = 0x40;
         let d16_mod = 0x80;
+        let mod11 = 0xC0;
 
         while current < asm_bytes.len() {
             let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1]) {
@@ -302,17 +303,22 @@ fn main() {
                     let has_d16 = mod_ == d16_mod;
 
                     let mut byte_inc = 2;
-                    let data_pos = if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
-                    let data = if w == 0x00 {
+                    let data_pos = 2 + if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
+                    let data = if mod_ == mod11 {
                         byte_inc += 1;
-
-                        format!("byte {}", asm_bytes[current + 2 + data_pos])
+                        format!("{}", asm_bytes[current + data_pos])
                     } else {
-                        byte_inc += 2;
+                        if w == 0x00 {
+                            byte_inc += 1;
 
-                        format!("word {}", d16_displacement(
-                            asm_bytes[current + 2 + data_pos],
-                            asm_bytes[current + 3 + data_pos]))
+                            format!("byte {}", asm_bytes[current + data_pos])
+                        } else {
+                            byte_inc += 2;
+
+                            format!("word {}", d16_displacement(
+                                asm_bytes[current + data_pos],
+                                asm_bytes[current + data_pos + 1]))
+                        }
                     };
 
                     let addr: String = if mod_ == d8_mod {
@@ -329,6 +335,8 @@ fn main() {
                                 &rg_mem_table[&(rm)],
                                 if disp < 0 { "" } else { "+" },
                                 disp)
+                    } else if mod_ == mod11 {
+                        format!("{}", rg_table[&((w << 3) ^ rm)])
                     } else {
                         format!("[{}]", rg_mem_table[&(rm)])
                     };
