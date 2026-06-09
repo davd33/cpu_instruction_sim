@@ -142,7 +142,7 @@ fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, String)> {
     let mut add_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     add_ids.insert(InstType::RegMem, vec![(0xFC, 0x00)]); // Reg/mem
     add_ids.insert(InstType::ImmediateRegMem, vec![(0xFC, 0x80), (0x38, 0x00)]); // Immediate reg/mem
-    add_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x2C)]); // Immediate acc
+    add_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x04)]); // Immediate acc
 
     let mut sub_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     sub_ids.insert(InstType::RegMem, vec![(0xFC, 0x28)]); // Reg/mem
