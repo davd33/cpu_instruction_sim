@@ -131,7 +131,7 @@ fn d16_signed_displacement(low: u8, high: u8) -> i16 {
     d16_displacement(low, high) as i16
 }
 
-fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, String)> {
+fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, Command)> {
     let mut mov_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     mov_ids.insert(InstType::RegMem, vec![(0xFC, 0x88)]); // Reg/mem
     mov_ids.insert(InstType::ImmediateRegMem, vec![(0xFE, 0xC6)]); // Immediate reg/mem
@@ -167,12 +167,12 @@ fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, String)> {
                 if decoder.len() == 2 {
                     if let Some((mask2, opcode2)) = decoder.get(1) {
                         if ((byte1 & mask) == *opcode) && ((byte2 & mask2) == *opcode2) {
-                            return Some((inst_type, k.to_string()));
+                            return Some((inst_type, k));
                         }
                     }
                 } else {
                     if (byte1 & mask) == *opcode {
-                        return Some((inst_type, k.to_string()));
+                        return Some((inst_type, k));
                     }
                 }
             }
@@ -304,7 +304,7 @@ fn main() {
 
                     let mut byte_inc = 2;
                     let data_pos = 2 + if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
-                    let data = if mod_ == mod11 {
+                    let data = if mod_ == mod11 || command != Command::MOV {
                         byte_inc += 1;
                         format!("{}", asm_bytes[current + data_pos])
                     } else {
@@ -341,7 +341,17 @@ fn main() {
                         format!("[{}]", rg_mem_table[&(rm)])
                     };
 
-                    println!("{} {}, {} ", command, addr, data);
+                    let addr_size = if command != Command::MOV {
+                        if w == 0 {
+                            "byte "
+                        } else {
+                            "word "
+                        }
+                    } else {
+                        " "
+                    };
+
+                    println!("{} {}{}, {} ", command, addr_size, addr, data);
 
                     current += byte_inc;
                 },
