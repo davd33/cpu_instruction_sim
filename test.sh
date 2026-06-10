@@ -15,11 +15,11 @@ function test_asm() {
 cargo build
 
 # change the path below to the file to be tested
-export ASM_BINARY='asm/mov_mem_to_reg/simple'
-test_asm
-export ASM_BINARY='asm/mov_mem_to_reg/hard'
-test_asm
 export ASM_BINARY='asm/mov_reg_to_reg/simple'
 test_asm
 export ASM_BINARY='asm/mov_reg_to_reg/long'
+test_asm
+export ASM_BINARY='asm/mov_mem_to_reg/simple'
+test_asm
+export ASM_BINARY='asm/mov_mem_to_reg/hard'
 test_asm
