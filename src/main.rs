@@ -210,7 +210,7 @@ fn main() {
         while current < asm_bytes.len() {
             let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1]) {
                 None => {
-                    print_current_byte(&asm_bytes, current);
+                    println!("No such instruction. {}", format_current_byte(&asm_bytes, current));
                     exit(1);
                 }
                 Some(cmd) => cmd
@@ -397,9 +397,9 @@ fn main() {
     }
 }
 
-fn print_current_byte(asm_bytes: &Vec<u8>, current: usize) {
-    println!("No such instruction, ADDR {:02X}/{:02X} = {:02X} ({:08b}) {:02X} ({:08b})",
+fn format_current_byte(asm_bytes: &Vec<u8>, current: usize) -> String {
+    format!("ADDR {:02X}/{:02X} = {:02X} ({:08b}) {:02X} ({:08b})",
              current / 16, current % 16,
              asm_bytes[current], asm_bytes[current],
-             asm_bytes[current + 1], asm_bytes[current + 1]);
+             asm_bytes[current + 1], asm_bytes[current + 1])
 }
