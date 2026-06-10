@@ -48,6 +48,7 @@ enum InstType {
     ImmediateReg,
     MemAcc,
     AccMem,
+    ImmediateToAcc,
 }
 
 /// The returned table's keys encode a one byte value as follows:
@@ -142,17 +143,17 @@ fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, Command)> {
     let mut add_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     add_ids.insert(InstType::RegMem, vec![(0xFC, 0x00)]); // Reg/mem
     add_ids.insert(InstType::ImmediateRegMem, vec![(0xFC, 0x80), (0x38, 0x00)]); // Immediate reg/mem
-    add_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x04)]); // Immediate acc
+    add_ids.insert(InstType::ImmediateToAcc, vec![(0xFE, 0x04)]); // Immediate acc
 
     let mut sub_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     sub_ids.insert(InstType::RegMem, vec![(0xFC, 0x28)]); // Reg/mem
     sub_ids.insert(InstType::ImmediateRegMem, vec![(0xFC, 0x80), (0x38, 0x28)]); // Immediate reg/mem
-    sub_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x2C)]); // Immediate acc
+    sub_ids.insert(InstType::ImmediateToAcc, vec![(0xFE, 0x2C)]); // Immediate acc
 
     let mut cmp_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     cmp_ids.insert(InstType::RegMem, vec![(0xFC, 0x38)]); // Reg/mem
     cmp_ids.insert(InstType::ImmediateRegMem, vec![(0xFC, 0x80), (0x38, 0x38)]); // Immediate reg/mem
-    cmp_ids.insert(InstType::ImmediateReg, vec![(0xFE, 0x3C)]); // Immediate acc
+    cmp_ids.insert(InstType::ImmediateToAcc, vec![(0xFE, 0x3C)]); // Immediate acc
 
     let mut commands: HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>> = HashMap::new();
     commands.insert(Command::MOV, mov_ids);
@@ -383,6 +384,21 @@ fn main() {
                     println!("{} [{}], ax", command, disp);
                     current += 3;
                 },
+                InstType::ImmediateToAcc => {
+                    let w_mask = 0x01;
+
+                    let w = asm_bytes[current] & w_mask;
+
+                    let data: u16 = if w == 0 {
+                        asm_bytes[current + 1] as u16
+                    } else {
+                        d16_displacement(asm_bytes[current + 1], asm_bytes[current + 2])
+                    };
+
+                    println!("{} ax, {} ", command, data);
+
+                    current += if w == 1 { 3 } else { 2 };
+                }
             }
         }
     } else {
