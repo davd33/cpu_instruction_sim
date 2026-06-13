@@ -395,7 +395,9 @@ fn main() {
                         d16_displacement(asm_bytes[current + 1], asm_bytes[current + 2])
                     };
 
-                    println!("{} ax, {} ", command, data);
+                    let reg = if w == 0 { "al" } else { "ax" };
+
+                    println!("{} {}, {} ", command, reg, data);
 
                     current += if w == 1 { 3 } else { 2 };
                 }
