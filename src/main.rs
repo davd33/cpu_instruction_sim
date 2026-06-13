@@ -132,6 +132,10 @@ fn d16_signed_displacement(low: u8, high: u8) -> i16 {
     d16_displacement(low, high) as i16
 }
 
+fn d8_signed_extended(low: u8) -> i16 {
+    low as i16
+}
+
 fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, Command)> {
     let mut mov_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     mov_ids.insert(InstType::RegMem, vec![(0xFC, 0x88)]); // Reg/mem
@@ -294,31 +298,39 @@ fn main() {
                 InstType::ImmediateRegMem => {
                     let mod_mask = 0xC0;
                     let w_mask = 0x01;
+                    let s_mask = 0x02;
                     let rm_mask = 0x07;
 
                     let mod_ = asm_bytes[current + 1] & mod_mask;
+                    let s = (asm_bytes[current] & s_mask) >> 1;
                     let w = asm_bytes[current] & w_mask;
                     let rm = asm_bytes[current + 1] & rm_mask;
 
                     let has_d8 = mod_ == d8_mod;
-                    let has_d16 = mod_ == d16_mod;
+                    let has_d16 = mod_ == d16_mod || (mod_ == direct_address_mod && rm == 6);
 
                     let mut byte_inc = 2;
                     let data_pos = 2 + if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
-                    let data = if mod_ == mod11 || command != Command::MOV {
+                    let data = if mod_ == mod11 {
                         byte_inc += 1;
                         format!("{}", asm_bytes[current + data_pos])
                     } else {
                         if w == 0x00 {
                             byte_inc += 1;
 
-                            format!("byte {}", asm_bytes[current + data_pos])
+                            let byte = if command == Command::MOV { "byte " } else { "" };
+                            format!("{}{}", byte, asm_bytes[current + data_pos])
                         } else {
-                            byte_inc += 2;
-
-                            format!("word {}", d16_displacement(
-                                asm_bytes[current + data_pos],
-                                asm_bytes[current + data_pos + 1]))
+                            let word = if command == Command::MOV { "word " } else { "" };
+                            if s == 1 && command != Command::MOV {
+                                byte_inc += 1;
+                                format!("{}{}", word, d8_signed_extended(asm_bytes[current + data_pos]))
+                            } else {
+                                byte_inc += 2;
+                                format!("{}{}", word, d16_displacement(
+                                    asm_bytes[current + data_pos],
+                                    asm_bytes[current + data_pos + 1]))
+                            }
                         }
                     };
 
@@ -336,6 +348,10 @@ fn main() {
                                 &rg_mem_table[&(rm)],
                                 if disp < 0 { "" } else { "+" },
                                 disp)
+                    } else if mod_ == direct_address_mod && rm == 0x06 {
+                        byte_inc += 2;
+                        let disp: u16 = d16_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
+                        format!("[{}]", disp)
                     } else if mod_ == mod11 {
                         format!("{}", rg_table[&((w << 3) ^ rm)])
                     } else {
