@@ -28,6 +28,10 @@ impl CyclesStat {
 #[derive(Eq, PartialEq, Hash)]
 enum Command {
     MOV, ADD, SUB, CMP,
+    JNZ, JE, JL, JLE, JB,
+    JBE, JP, JO, JS, JNE, JNL,
+    JG, JNB, JA, JNP, JNO, JNS,
+    LOOP, LOOPZ, LOOPNZ, JCXZ
 }
 
 impl Display for Command {
@@ -37,6 +41,27 @@ impl Display for Command {
             Command::ADD => "ADD",
             Command::SUB => "SUB",
             Command::CMP => "CMP",
+            Command::JNZ => "JNZ",
+            Command::JE => "JE",
+            Command::JL => "JL",
+            Command::JLE => "JLE",
+            Command::JB => "JB",
+            Command::JBE => "JBE",
+            Command::JP => "JP",
+            Command::JO => "JO",
+            Command::JS => "JS",
+            Command::JNE => "JNE",
+            Command::JNL => "JNL",
+            Command::JG => "JG",
+            Command::JNB => "JNB",
+            Command::JA => "JA",
+            Command::JNP => "JNP",
+            Command::JNO => "JNO",
+            Command::JNS => "JNS",
+            Command::LOOP => "LOOP",
+            Command::LOOPZ => "LOOPZ",
+            Command::LOOPNZ => "LOOPNZ",
+            Command::JCXZ => "JCXZ",
         })
     }
 }
@@ -49,6 +74,7 @@ enum InstType {
     MemAcc,
     AccMem,
     ImmediateToAcc,
+    ToLabel,
 }
 
 /// The returned table's keys encode a one byte value as follows:
@@ -164,6 +190,69 @@ fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, Command)> {
     commands.insert(Command::ADD, add_ids);
     commands.insert(Command::SUB, sub_ids);
     commands.insert(Command::CMP, cmp_ids);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x75)]);
+    commands.insert(Command::JNZ, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x74)]);
+    commands.insert(Command::JE, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x7C)]);
+    commands.insert(Command::JL, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x7E)]);
+    commands.insert(Command::JLE, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x72)]);
+    commands.insert(Command::JB, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x76)]);
+    commands.insert(Command::JBE, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x7A)]);
+    commands.insert(Command::JP, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x70)]);
+    commands.insert(Command::JO, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x78)]);
+    commands.insert(Command::JS, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x75)]);
+    commands.insert(Command::JNE, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x7D)]);
+    commands.insert(Command::JNL, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x7F)]);
+    commands.insert(Command::JG, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x73)]);
+    commands.insert(Command::JNB, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x77)]);
+    commands.insert(Command::JA, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x7B)]);
+    commands.insert(Command::JNP, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x71)]);
+    commands.insert(Command::JNO, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0x79)]);
+    commands.insert(Command::JNS, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0xE2)]);
+    commands.insert(Command::LOOP, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0xE1)]);
+    commands.insert(Command::LOOPZ, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0xE0)]);
+    commands.insert(Command::LOOPNZ, insts);
+    let mut insts = HashMap::new();
+    insts.insert(InstType::ToLabel, vec![(0xFF, 0xE3)]);
+    commands.insert(Command::JCXZ, insts);
 
     for (k, v) in commands {
         for (inst_type, decoder) in v {
@@ -416,7 +505,12 @@ fn main() {
                     println!("{} {}, {} ", command, reg, data);
 
                     current += if w == 1 { 3 } else { 2 };
-                }
+                },
+                InstType::ToLabel => {
+                    println!("{}", command);
+
+                    current += 2;
+                },
             }
         }
     } else {
