@@ -447,14 +447,14 @@ fn main() {
                         format!("[{}]", rg_mem_table[&(rm)])
                     };
 
-                    let addr_size = if command != Command::MOV {
+                    let addr_size = if command != Command::MOV && addr.contains("[") {
                         if w == 0 {
                             "byte "
                         } else {
                             "word "
                         }
                     } else {
-                        " "
+                        ""
                     };
 
                     println!("{} {}{}, {} ", command, addr_size, addr, data);
