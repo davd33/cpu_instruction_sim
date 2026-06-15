@@ -507,7 +507,8 @@ fn main() {
                     current += if w == 1 { 3 } else { 2 };
                 },
                 InstType::ToLabel => {
-                    println!("{}", command);
+                    let jump = asm_bytes[current + 1] as i8;
+                    println!("{} ${:+}", command, jump+2);
 
                     current += 2;
                 },

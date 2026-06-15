@@ -23,3 +23,5 @@ export ASM_BINARY='asm/mov_mem_to_reg/simple'
 test_asm
 export ASM_BINARY='asm/mov_mem_to_reg/hard'
 test_asm
+export ASM_BINARY='asm/add_sub_cmp/simple'
+test_asm
