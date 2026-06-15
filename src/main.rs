@@ -162,7 +162,7 @@ fn d8_signed_extended(low: u8) -> i16 {
     low as i16
 }
 
-fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, Command)> {
+fn get_commands_map() -> HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>> {
     let mut mov_ids: HashMap<InstType, Vec<(u8, u8)>> = HashMap::new();
     mov_ids.insert(InstType::RegMem, vec![(0xFC, 0x88)]); // Reg/mem
     mov_ids.insert(InstType::ImmediateRegMem, vec![(0xFE, 0xC6)]); // Immediate reg/mem
@@ -254,6 +254,10 @@ fn which_command(byte1: u8, byte2: u8) -> Option<(InstType, Command)> {
     insts.insert(InstType::ToLabel, vec![(0xFF, 0xE3)]);
     commands.insert(Command::JCXZ, insts);
 
+    commands
+}
+
+fn which_command(byte1: u8, byte2: u8, commands: &HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>>) -> Option<(&InstType, &Command)> {
     for (k, v) in commands {
         for (inst_type, decoder) in v {
             assert!(decoder.len() >= 1 && decoder.len() <= 2, "Instruction decoder must have 1, 2 elements.");
@@ -301,8 +305,10 @@ fn main() {
         let d16_mod = 0x80;
         let mod11 = 0xC0;
 
+        let commands = get_commands_map();
+
         while current < asm_bytes.len() {
-            let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1]) {
+            let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1], &commands) {
                 None => {
                     println!("No such instruction. {}", format_current_byte(&asm_bytes, current));
                     exit(1);
@@ -407,11 +413,11 @@ fn main() {
                         if w == 0x00 {
                             byte_inc += 1;
 
-                            let byte = if command == Command::MOV { "byte " } else { "" };
+                            let byte = if *command == Command::MOV { "byte " } else { "" };
                             format!("{}{}", byte, asm_bytes[current + data_pos])
                         } else {
-                            let word = if command == Command::MOV { "word " } else { "" };
-                            if s == 1 && command != Command::MOV {
+                            let word = if *command == Command::MOV { "word " } else { "" };
+                            if s == 1 && *command != Command::MOV {
                                 byte_inc += 1;
                                 format!("{}{}", word, d8_signed_extended(asm_bytes[current + data_pos]))
                             } else {
@@ -447,7 +453,7 @@ fn main() {
                         format!("[{}]", rg_mem_table[&(rm)])
                     };
 
-                    let addr_size = if command != Command::MOV && addr.contains("[") {
+                    let addr_size = if *command != Command::MOV && addr.contains("[") {
                         if w == 0 {
                             "byte "
                         } else {
