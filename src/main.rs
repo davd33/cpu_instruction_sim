@@ -52,6 +52,48 @@ impl CPU8086 {
         }
     }
 
+    fn get(&self, reg: Register) -> u16 {
+        match reg {
+            Register::AX => self.ax(),
+            Register::AL => self.al() as u16,
+            Register::AH => self.ah() as u16,
+            Register::BX => self.bx(),
+            Register::BL => self.bl() as u16,
+            Register::BH => self.bh() as u16,
+            Register::CX => self.cx(),
+            Register::CL => self.cl() as u16,
+            Register::CH => self.ch() as u16,
+            Register::DX => self.dx(),
+            Register::DL => self.dl() as u16,
+            Register::DH => self.dh() as u16,
+            Register::BP => self.bp(),
+            Register::SP => self.sp(),
+            Register::DI => self.di(),
+            Register::SI => self.si(),
+        }
+    }
+
+    fn set(&mut self, reg: Register, val: u16) {
+        match reg {
+            Register::AX => self.set_ax(val),
+            Register::AL => self.set_al(val as u8),
+            Register::AH => self.set_ah(val as u8),
+            Register::BX => self.set_bx(val),
+            Register::BL => self.set_bl(val as u8),
+            Register::BH => self.set_bh(val as u8),
+            Register::CX => self.set_cx(val),
+            Register::CL => self.set_cl(val as u8),
+            Register::CH => self.set_ch(val as u8),
+            Register::DX => self.set_dx(val),
+            Register::DL => self.set_dl(val as u8),
+            Register::DH => self.set_dh(val as u8),
+            Register::BP => self.set_bp(val),
+            Register::SP => self.set_sp(val),
+            Register::DI => self.set_di(val),
+            Register::SI => self.set_si(val),
+        }
+    }
+
     fn set_bp(&mut self, val: u16) {
         self.regs[self.bp] = val;
     }
