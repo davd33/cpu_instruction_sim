@@ -239,7 +239,29 @@ impl CPU8086 {
     }
 }
 
-#[derive(Eq, PartialEq, Hash)]
+impl Display for CPU8086 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut output = "".to_string();
+
+        for r in [
+            Register::AX,
+            Register::BX,
+            Register::CX,
+            Register::DX,
+            Register::SP,
+            Register::BP,
+            Register::SI,
+            Register::DI] {
+
+            let value = self.get(r);
+            output = format!("{}\n{}: 0x{:04x} ({})", output, r, value, value);
+        }
+
+        write!(f, "{}", output)
+    }
+}
+
+#[derive(Eq, PartialEq, Hash, Clone)]
 enum Command {
     MOV, ADD, SUB, CMP,
     JNZ, JE, JL, JLE, JB,
@@ -280,6 +302,47 @@ impl Display for Command {
     }
 }
 
+
+trait Operand {}
+struct RegisterOp {
+    register: Register,
+}
+impl Operand for RegisterOp {}
+struct ImmediateOp {
+    value: u16,
+}
+impl Operand for ImmediateOp {}
+
+trait CommandImpl {
+    fn execute(&mut self, cpu: &mut CPU8086);
+}
+struct Mov<T: Operand, E: Operand> {
+    instruction: Instruction<T, E>
+}
+
+impl CommandImpl for Mov<RegisterOp, ImmediateOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op1.register, self.instruction.op2.value);
+    }
+}
+
+impl Into<Box<dyn CommandImpl>> for Instruction<RegisterOp, ImmediateOp> {
+    fn into(self) -> Box<dyn CommandImpl> {
+        match self.command {
+            Command::MOV => Box::new(Mov::<RegisterOp, ImmediateOp> {
+                instruction: self
+            }),
+            _ => unimplemented!()
+        }
+    }
+}
+
+struct Instruction<T: Operand, E: Operand> {
+    command: Command,
+    op1: T,
+    op2: E,
+}
+
 #[derive(Eq, Hash, PartialEq)]
 enum InstType {
     RegMem,
@@ -291,6 +354,7 @@ enum InstType {
     ToLabel,
 }
 
+#[derive(Clone, Copy)]
 enum Register {
     AX, AL, AH,
     BX, BL, BH,
@@ -556,6 +620,7 @@ fn main() {
         let mod11 = 0xC0;
 
         let commands = get_commands_map();
+        let mut cpu = CPU8086::new();
 
         while current < asm_bytes.len() {
             let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1], &commands) {
@@ -723,7 +788,7 @@ fn main() {
 
                     let w = (asm_bytes[current] & w_mask) >> 3;
                     let reg = asm_bytes[current] & reg_mask;
-                    let reg_str = &rg_table[&(w << 3 | reg)];
+                    let register = &rg_table[&(w << 3 | reg)];
 
                     let data: u16 = if w == 0 {
                         asm_bytes[current + 1] as u16
@@ -731,7 +796,13 @@ fn main() {
                         d16_displacement(asm_bytes[current + 1], asm_bytes[current + 2])
                     };
 
-                    println!("{} {}, {} ", command, reg_str, data);
+                    println!("{} {}, {} ", command, register, data);
+                    let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
+                        command: command.clone(),
+                        op1: RegisterOp {register: register.clone()},
+                        op2: ImmediateOp {value: data},
+                    }.into();
+                    mov_cmd.execute(&mut cpu);
 
                     current += if w == 1 { 3 } else { 2 };
                 },
@@ -770,6 +841,8 @@ fn main() {
                 },
             }
         }
+
+        println!("RESULT = {}", cpu)
     } else {
         println!("File not found");
     }
