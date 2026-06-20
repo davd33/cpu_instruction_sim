@@ -129,7 +129,9 @@ impl CPU8086 {
     // A
 
     fn set_ax(&mut self, val: u16) {
-        self.regs[self.ax] = val;
+        let low = val << 8;
+        let high = val >> 8;
+        self.regs[self.ax] = low ^ high;
     }
 
     fn ax(&self) -> u16 {
@@ -155,7 +157,9 @@ impl CPU8086 {
     // B
 
     fn set_bx(&mut self, val: u16) {
-        self.regs[self.bx] = val;
+        let low = val << 8;
+        let high = val >> 8;
+        self.regs[self.bx] = low ^ high;
     }
 
     fn bx(&self) -> u16 {
@@ -181,7 +185,9 @@ impl CPU8086 {
     // C
 
     fn set_cx(&mut self, val: u16) {
-        self.regs[self.cx] = val;
+        let low = val << 8;
+        let high = val >> 8;
+        self.regs[self.cx] = low ^ high;
     }
 
     fn cx(&self) -> u16 {
@@ -207,7 +213,9 @@ impl CPU8086 {
     // D
 
     fn set_dx(&mut self, val: u16) {
-        self.regs[self.dx] = val;
+        let low = val << 8;
+        let high = val >> 8;
+        self.regs[self.dx] = low ^ high;
     }
 
     fn dx(&self) -> u16 {
@@ -789,11 +797,15 @@ mod tests {
     fn test_cpu_register_access() {
         // A
         let mut cpu = CPU8086::new();
-        cpu.set_al(1);
-        assert_eq!(cpu.ax(), 1);
+        cpu.set_al(0x0001);
+        assert_eq!(cpu.ax(), 0x0001);
         cpu.set_al(0);
-        cpu.set_ah(1);
-        assert_eq!(cpu.ax(), 256);
+        cpu.set_ah(0x01);
+        assert_eq!(cpu.ax(), 0x0100);
+        cpu.set_ah(0);
+        cpu.set_al(0);
+        cpu.set_ax(0x01);
+        assert_eq!(cpu.ax(), 0x0001);
         // B
         let mut cpu = CPU8086::new();
         cpu.set_bl(0x02);
@@ -801,6 +813,10 @@ mod tests {
         cpu.set_bl(0);
         cpu.set_bh(0x02);
         assert_eq!(cpu.bx(), 512);
+        cpu.set_bh(0);
+        cpu.set_bl(0);
+        cpu.set_bx(0x02);
+        assert_eq!(cpu.bx(), 0x0002);
         // C
         let mut cpu = CPU8086::new();
         cpu.set_cl(0x04);
@@ -808,6 +824,10 @@ mod tests {
         cpu.set_cl(0);
         cpu.set_ch(0x04);
         assert_eq!(cpu.cx(), 1024);
+        cpu.set_ch(0);
+        cpu.set_cl(0);
+        cpu.set_cx(0x03);
+        assert_eq!(cpu.cx(), 0x0003);
         // D
         let mut cpu = CPU8086::new();
         cpu.set_dl(0x08);
@@ -815,6 +835,10 @@ mod tests {
         cpu.set_dl(0);
         cpu.set_dh(0x08);
         assert_eq!(cpu.dx(), 2048);
+        cpu.set_dh(0);
+        cpu.set_dl(0);
+        cpu.set_dx(0x04);
+        assert_eq!(cpu.dx(), 0x0004);
         // BP
         let mut cpu = CPU8086::new();
         cpu.set_bp(0x11);
