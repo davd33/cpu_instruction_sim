@@ -1,6 +1,6 @@
 use std::arch::x86_64::{__cpuid, _rdtsc};
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::{env, fs};
 use std::process::exit;
 
@@ -25,6 +25,170 @@ impl CyclesStat {
     }
 }
 
+struct CPU8086 {
+    regs: [u16; 8],
+    ax: usize,
+    bx: usize,
+    cx: usize,
+    dx: usize,
+    bp: usize,
+    sp: usize,
+    di: usize,
+    si: usize,
+}
+
+impl CPU8086 {
+    fn new() -> Self {
+        CPU8086 {
+            regs: [0,0,0,0,0,0,0,0],
+            ax: 0,
+            bx: 1,
+            cx: 2,
+            dx: 3,
+            bp: 4,
+            sp: 5,
+            di: 6,
+            si: 7,
+        }
+    }
+
+    fn set_bp(&mut self, val: u16) {
+        self.regs[self.bp] = val;
+    }
+
+    fn bp(&self) -> u16 {
+        self.regs[self.bp]
+    }
+
+    fn set_sp(&mut self, val: u16) {
+        self.regs[self.sp] = val;
+    }
+
+    fn sp(&self) -> u16 {
+        self.regs[self.sp]
+    }
+
+    fn set_di(&mut self, val: u16) {
+        self.regs[self.di] = val;
+    }
+
+    fn di(&self) -> u16 {
+        self.regs[self.di]
+    }
+
+    fn set_si(&mut self, val: u16) {
+        self.regs[self.si] = val;
+    }
+
+    fn si(&self) -> u16 {
+        self.regs[self.si]
+    }
+
+    // A
+
+    fn set_ax(&mut self, val: u16) {
+        self.regs[self.ax] = val;
+    }
+
+    fn ax(&self) -> u16 {
+        self.al() as u16 ^ ((self.ah() as u16) << 8)
+    }
+
+    fn set_al(&mut self, val: u8) {
+        self.regs[self.ax] = ((val as u16) << 8) ^ self.ax();
+    }
+
+    fn al(&self) -> u8 {
+        (self.regs[self.ax] >> 8) as u8
+    }
+
+    fn set_ah(&mut self, val: u8) {
+        self.regs[self.ax] = ((self.al() as u16) << 8) ^ val as u16;
+    }
+
+    fn ah(&self) -> u8 {
+        self.regs[self.ax] as u8
+    }
+
+    // B
+
+    fn set_bx(&mut self, val: u16) {
+        self.regs[self.bx] = val;
+    }
+
+    fn bx(&self) -> u16 {
+        self.bl() as u16 ^ ((self.bh() as u16) << 8)
+    }
+
+    fn set_bl(&mut self, val: u8) {
+        self.regs[self.bx] = ((val as u16) << 8) ^ self.bx();
+    }
+
+    fn bl(&self) -> u8 {
+        (self.regs[self.bx] >> 8) as u8
+    }
+
+    fn set_bh(&mut self, val: u8) {
+        self.regs[self.bx] = ((self.bl() as u16) << 8) ^ val as u16;
+    }
+
+    fn bh(&self) -> u8 {
+        self.regs[self.bx] as u8
+    }
+
+    // C
+
+    fn set_cx(&mut self, val: u16) {
+        self.regs[self.cx] = val;
+    }
+
+    fn cx(&self) -> u16 {
+        self.cl() as u16 ^ ((self.ch() as u16) << 8)
+    }
+
+    fn set_cl(&mut self, val: u8) {
+        self.regs[self.cx] = ((val as u16) << 8) ^ self.cx();
+    }
+
+    fn cl(&self) -> u8 {
+        (self.regs[self.cx] >> 8) as u8
+    }
+
+    fn set_ch(&mut self, val: u8) {
+        self.regs[self.cx] = ((self.cl() as u16) << 8) ^ val as u16;
+    }
+
+    fn ch(&self) -> u8 {
+        self.regs[self.cx] as u8
+    }
+
+    // D
+
+    fn set_dx(&mut self, val: u16) {
+        self.regs[self.dx] = val;
+    }
+
+    fn dx(&self) -> u16 {
+        self.dl() as u16 ^ ((self.dh() as u16) << 8)
+    }
+
+    fn set_dl(&mut self, val: u8) {
+        self.regs[self.dx] = ((val as u16) << 8) ^ self.dx();
+    }
+
+    fn dl(&self) -> u8 {
+        (self.regs[self.dx] >> 8) as u8
+    }
+
+    fn set_dh(&mut self, val: u8) {
+        self.regs[self.dx] = ((self.dl() as u16) << 8) ^ val as u16;
+    }
+
+    fn dh(&self) -> u8 {
+        self.regs[self.dx] as u8
+    }
+}
+
 #[derive(Eq, PartialEq, Hash)]
 enum Command {
     MOV, ADD, SUB, CMP,
@@ -35,7 +199,7 @@ enum Command {
 }
 
 impl Display for Command {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
             Command::MOV => "MOV",
             Command::ADD => "ADD",
@@ -77,33 +241,69 @@ enum InstType {
     ToLabel,
 }
 
+enum Register {
+    AX, AL, AH,
+    BX, BL, BH,
+    CX, CL, CH,
+    DX, DL, DH,
+    BP,
+    SP,
+    DI,
+    SI,
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let reg_str = match self {
+            Register::AX => "AX",
+            Register::AL => "AL",
+            Register::AH => "AH",
+            Register::BX => "BX",
+            Register::BL => "BL",
+            Register::BH => "BH",
+            Register::CX => "CX",
+            Register::CL => "CL",
+            Register::CH => "CH",
+            Register::DX => "DX",
+            Register::DL => "DL",
+            Register::DH => "DH",
+            Register::BP => "BP",
+            Register::SP => "SP",
+            Register::DI => "DI",
+            Register::SI => "SI",
+        };
+
+        write!(f, "{}", reg_str)
+    }
+}
+
 /// The returned table's keys encode a one byte value as follows:
 /// 0000 + W (1bit) + REG | R/M (3bits)
 /// 16 values in this table: from 0x00 up to 0x0F
 ///
 /// The values are string representations of the register.
-fn mod11_registers_table() -> HashMap<u8, String> {
-    let mut table = HashMap::new();
+fn mod11_registers_table() -> HashMap<u8, Register> {
+    let mut table: HashMap<u8, Register> = HashMap::new();
 
     // W = 0
-    table.insert(0x00, String::from("AL"));
-    table.insert(0x01, String::from("CL"));
-    table.insert(0x02, String::from("DL"));
-    table.insert(0x03, String::from("BL"));
-    table.insert(0x04, String::from("AH"));
-    table.insert(0x05, String::from("CH"));
-    table.insert(0x06, String::from("DH"));
-    table.insert(0x07, String::from("BH"));
+    table.insert(0x00, Register::AL);
+    table.insert(0x01, Register::CL);
+    table.insert(0x02, Register::DL);
+    table.insert(0x03, Register::BL);
+    table.insert(0x04, Register::AH);
+    table.insert(0x05, Register::CH);
+    table.insert(0x06, Register::DH);
+    table.insert(0x07, Register::BH);
 
     // W = 1
-    table.insert(0x08, String::from("AX"));
-    table.insert(0x09, String::from("CX"));
-    table.insert(0x0A, String::from("DX"));
-    table.insert(0x0B, String::from("BX"));
-    table.insert(0x0C, String::from("SP"));
-    table.insert(0x0D, String::from("BP"));
-    table.insert(0x0E, String::from("SI"));
-    table.insert(0x0F, String::from("DI"));
+    table.insert(0x08, Register::AX);
+    table.insert(0x09, Register::CX);
+    table.insert(0x0A, Register::DX);
+    table.insert(0x0B, Register::BX);
+    table.insert(0x0C, Register::SP);
+    table.insert(0x0D, Register::BP);
+    table.insert(0x0E, Register::SI);
+    table.insert(0x0F, Register::DI);
     table
 }
 
@@ -537,4 +737,57 @@ fn format_current_byte(asm_bytes: &Vec<u8>, current: usize) -> String {
              current / 16, current % 16,
              asm_bytes[current], asm_bytes[current],
              asm_bytes[current + 1], asm_bytes[current + 1])
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::CPU8086;
+
+    #[test]
+    fn test_cpu_register_access() {
+        // A
+        let mut cpu = CPU8086::new();
+        cpu.set_al(1);
+        assert_eq!(cpu.ax(), 1);
+        cpu.set_al(0);
+        cpu.set_ah(1);
+        assert_eq!(cpu.ax(), 256);
+        // B
+        let mut cpu = CPU8086::new();
+        cpu.set_bl(0x02);
+        assert_eq!(cpu.bx(), 2);
+        cpu.set_bl(0);
+        cpu.set_bh(0x02);
+        assert_eq!(cpu.bx(), 512);
+        // C
+        let mut cpu = CPU8086::new();
+        cpu.set_cl(0x04);
+        assert_eq!(cpu.cx(), 4);
+        cpu.set_cl(0);
+        cpu.set_ch(0x04);
+        assert_eq!(cpu.cx(), 1024);
+        // D
+        let mut cpu = CPU8086::new();
+        cpu.set_dl(0x08);
+        assert_eq!(cpu.dx(), 8);
+        cpu.set_dl(0);
+        cpu.set_dh(0x08);
+        assert_eq!(cpu.dx(), 2048);
+        // BP
+        let mut cpu = CPU8086::new();
+        cpu.set_bp(0x11);
+        assert_eq!(cpu.bp(), 0x11);
+        // SP
+        let mut cpu = CPU8086::new();
+        cpu.set_sp(0x22);
+        assert_eq!(cpu.sp(), 0x22);
+        // DI
+        let mut cpu = CPU8086::new();
+        cpu.set_di(0x33);
+        assert_eq!(cpu.di(), 0x33);
+        // SI
+        let mut cpu = CPU8086::new();
+        cpu.set_si(0x44);
+        assert_eq!(cpu.si(), 0x44);
+    }
 }
