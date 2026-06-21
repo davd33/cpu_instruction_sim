@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="MOV SIM" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package cpu-instruction-sim --bin cpu-instruction-sim -- $PROJECT_DIR$/asm/sim/immediate_movs" />
+    <option name="command" value="run --package cpu-instruction-sim --bin cpu-instruction-sim -- $PROJECT_DIR$/asm/sim/immediate_movs --sim" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="true" />

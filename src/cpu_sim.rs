@@ -230,7 +230,7 @@ impl Display for CPU8086 {
             Register::DI] {
 
             let value = self.get(r);
-            output = format!("{}\n{}: 0x{:04x} ({})", output, r, value, value);
+            output = format!("{}\n      {}: 0x{:04x} ({})", output, r.to_string().to_lowercase(), value, value);
         }
 
         write!(f, "{}", output)

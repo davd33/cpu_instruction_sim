@@ -20,31 +20,31 @@ enum Command {
 impl Display for Command {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
-            Command::MOV => "MOV",
-            Command::ADD => "ADD",
-            Command::SUB => "SUB",
-            Command::CMP => "CMP",
-            Command::JNZ => "JNZ",
-            Command::JE => "JE",
-            Command::JL => "JL",
-            Command::JLE => "JLE",
-            Command::JB => "JB",
-            Command::JBE => "JBE",
-            Command::JP => "JP",
-            Command::JO => "JO",
-            Command::JS => "JS",
-            Command::JNE => "JNE",
-            Command::JNL => "JNL",
-            Command::JG => "JG",
-            Command::JNB => "JNB",
-            Command::JA => "JA",
-            Command::JNP => "JNP",
-            Command::JNO => "JNO",
-            Command::JNS => "JNS",
-            Command::LOOP => "LOOP",
-            Command::LOOPZ => "LOOPZ",
-            Command::LOOPNZ => "LOOPNZ",
-            Command::JCXZ => "JCXZ",
+            Command::MOV => "mov",
+            Command::ADD => "add",
+            Command::SUB => "sub",
+            Command::CMP => "cmp",
+            Command::JNZ => "jnz",
+            Command::JE => "je",
+            Command::JL => "jl",
+            Command::JLE => "jle",
+            Command::JB => "jb",
+            Command::JBE => "jbe",
+            Command::JP => "jp",
+            Command::JO => "jo",
+            Command::JS => "js",
+            Command::JNE => "jne",
+            Command::JNL => "jnl",
+            Command::JG => "jg",
+            Command::JNB => "jnb",
+            Command::JA => "ja",
+            Command::JNP => "jnp",
+            Command::JNO => "jno",
+            Command::JNS => "jns",
+            Command::LOOP => "loop",
+            Command::LOOPZ => "loopz",
+            Command::LOOPNZ => "loopnz",
+            Command::JCXZ => "jcxz",
         })
     }
 }
@@ -103,25 +103,75 @@ enum Register {
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let reg_str = match self {
-            Register::AX => "AX",
-            Register::AL => "AL",
-            Register::AH => "AH",
-            Register::BX => "BX",
-            Register::BL => "BL",
-            Register::BH => "BH",
-            Register::CX => "CX",
-            Register::CL => "CL",
-            Register::CH => "CH",
-            Register::DX => "DX",
-            Register::DL => "DL",
-            Register::DH => "DH",
-            Register::BP => "BP",
-            Register::SP => "SP",
-            Register::DI => "DI",
-            Register::SI => "SI",
+            Register::AX => "ax",
+            Register::AL => "al",
+            Register::AH => "ah",
+            Register::BX => "bx",
+            Register::BL => "bl",
+            Register::BH => "bh",
+            Register::CX => "cx",
+            Register::CL => "cl",
+            Register::CH => "ch",
+            Register::DX => "dx",
+            Register::DL => "dl",
+            Register::DH => "dh",
+            Register::BP => "bp",
+            Register::SP => "sp",
+            Register::DI => "di",
+            Register::SI => "si",
         };
 
         write!(f, "{}", reg_str)
+    }
+}
+
+fn print_usage(program: &str) {
+    println!("Usage: {} binary_path [--sim | --dis] [--help]", program);
+}
+
+#[derive(PartialEq)]
+enum AppCommand {
+    Simulation,
+    Disassembly,
+}
+
+struct ProgramArgs {
+    command: AppCommand,
+    file_path: String,
+}
+
+fn parse_args() -> ProgramArgs {
+    let args: Vec<String> = env::args().collect();
+
+    let program_name = args[0].clone();
+    let file_path = args[1].clone();
+    let mut app_command: Option<AppCommand> = Some(AppCommand::Disassembly);
+    for i in 2..args.len() {
+        match args[i].as_ref() {
+            "--sim" => {
+                app_command = Some(AppCommand::Simulation);
+            }
+            "--dis" => {
+                app_command = Some(AppCommand::Disassembly);
+            }
+            "--help" => {
+                print_usage(&program_name);
+                exit(0);
+            }
+            _ => {
+                println!("Unknown command: {}", args[i]);
+                print_usage(&program_name);
+                exit(1);
+            }
+        }
+    }
+
+    if let Some(command) = app_command {
+        ProgramArgs { command, file_path }
+    } else {
+        println!("Could not find app command: {}", program_name);
+        print_usage(&program_name);
+        exit(1);
     }
 }
 
@@ -134,11 +184,12 @@ fn main() {
         println!("Please provide a file name for an ASM to be decoded.");
         exit(1);
     }
-    let asm_path = &args[1];
+
+    let program_args: &ProgramArgs = &parse_args();
 
     cycles_stats.push(CyclesStat::new("args read", cycles_stats::rdtsc()));
 
-    if let Ok(asm_bytes) = fs::read(asm_path) {
+    if let Ok(asm_bytes) = fs::read(program_args.file_path.clone()) {
         let mut current = 0;
         let rg_table = decode::mod11_registers_table();
         let rg_mem_table = decode::reg_mem_registers_table();
@@ -327,7 +378,7 @@ fn main() {
                         decode::d16_displacement(asm_bytes[current + 1], asm_bytes[current + 2])
                     };
 
-                    println!("{} {}, {} ", command, register, data);
+                    println!("{} {}, {}", command, register, data);
                     let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
                         command: command.clone(),
                         op1: RegisterOp {register: register.clone()},
@@ -373,7 +424,9 @@ fn main() {
             }
         }
 
-        println!("RESULT = {}", cpu)
+        if program_args.command == AppCommand::Simulation {
+            println!("\nFinal registers:{}", cpu);
+        }
     } else {
         println!("File not found");
     }
