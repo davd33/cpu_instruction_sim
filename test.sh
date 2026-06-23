@@ -40,3 +40,5 @@ test_asm
 # cpu instructions simulation tests
 export ASM_BINARY='asm/sim/immediate_movs'
 test_sim
+export ASM_BINARY='asm/sim/register_movs'
+test_sim

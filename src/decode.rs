@@ -255,26 +255,39 @@ pub fn process_instruction(asm_bytes: &Vec<u8>,
             let d = (asm_bytes[current] & d_mask) >> 1;
             let w = asm_bytes[current] & w_mask;
 
-            let reg_str = &rg_table[&(w << 3 | reg)];
-            let rm_str = &rg_table[&(w << 3 | rm)];
+            let reg = &rg_table[&(w << 3 | reg)];
+            let reg2 = &rg_table[&(w << 3 | rm)];
 
             if mod_ == MOD11 {
                 if d == 1 {
-                    println!("{} {}, {}", command, reg_str, rm_str);
+                    println!("{} {}, {}", command, reg, reg2);
+
+                    let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
+                        command: command.clone(),
+                        op1: RegisterOp { register: reg.clone() },
+                        op2: RegisterOp { register: reg2.clone() },
+                    }.into();
+                    cpu_exec(cpu, &mut mov_cmd);
                 } else {
-                    println!("{} {}, {}", command, rm_str, reg_str);
+                    println!("{} {}, {}", command, reg2, reg);
+                    let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
+                        command: command.clone(),
+                        op1: RegisterOp { register: reg.clone() },
+                        op2: RegisterOp { register: reg2.clone() },
+                    }.into();
+                    cpu_exec(cpu, &mut mov_cmd);
                 }
                 current += 2;
             } else if mod_ == DIRECT_ADDRESS_MOD && rm == 0x06 {
                 // DIRECT ADDRESS
                 let disp: u16 = d16_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
-                println!("{} {}, [{}]", command, reg_str, disp);
+                println!("{} {}, [{}]", command, reg, disp);
                 current += 4;
             } else if mod_ == D8_MOD {
                 let disp: i8 = asm_bytes[current + 2] as i8;
 
-                let left = format!("{}", reg_str);
+                let left = format!("{}", reg);
                 let right = format!("[{} {} {}]",
                                     rg_mem_table[&((mod_ >> 2) ^ rm)],
                                     if disp < 0 { "" } else { "+" },
@@ -289,7 +302,7 @@ pub fn process_instruction(asm_bytes: &Vec<u8>,
             } else if mod_ == D16_MOD {
                 let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
-                let left = format!("{}", reg_str);
+                let left = format!("{}", reg);
                 let right = format!("[{} {} {}]",
                                     &rg_mem_table[&(rm)],
                                     if disp < 0 { "" } else { "+" },
@@ -303,7 +316,7 @@ pub fn process_instruction(asm_bytes: &Vec<u8>,
                 current += 4;
             } else {
                 // no displacement
-                let left = format!("{}", reg_str);
+                let left = format!("{}", reg);
                 let right = format!("[{}]", rg_mem_table[&(rm)]);
 
                 if d == 1 {
@@ -407,14 +420,12 @@ pub fn process_instruction(asm_bytes: &Vec<u8>,
             };
 
             println!("{} {}, {}", command, register, data);
-            if let Some(cpu) = cpu {
-                let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
-                    command: command.clone(),
-                    op1: RegisterOp { register: register.clone() },
-                    op2: ImmediateOp { value: data },
-                }.into();
-                mov_cmd.execute(cpu);
-            }
+            let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
+                command: command.clone(),
+                op1: RegisterOp { register: register.clone() },
+                op2: ImmediateOp { value: data },
+            }.into();
+            cpu_exec(cpu, &mut mov_cmd);
 
             current += if w == 1 { 3 } else { 2 };
         },
@@ -454,4 +465,10 @@ pub fn process_instruction(asm_bytes: &Vec<u8>,
     }
     
     current
+}
+
+fn cpu_exec(cpu: &mut Option<CPU8086>, cmd: &mut Box<dyn CommandImpl>) {
+    if let Some(cpu) = cpu {
+        cmd.execute(cpu);
+    }
 }

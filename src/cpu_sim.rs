@@ -249,6 +249,132 @@ impl CommandImpl for Mov<RegisterOp, ImmediateOp> {
     }
 }
 
+impl CommandImpl for Mov<RegisterOp, RegisterOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op2.register, cpu.get(self.instruction.op1.register));
+    }
+}
+
+#[derive(Eq, PartialEq, Hash, Clone)]
+pub enum Command {
+    MOV, ADD, SUB, CMP,
+    JNZ, JE, JL, JLE, JB,
+    JBE, JP, JO, JS, JNE, JNL,
+    JG, JNB, JA, JNP, JNO, JNS,
+    LOOP, LOOPZ, LOOPNZ, JCXZ
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Command::MOV => "mov",
+            Command::ADD => "add",
+            Command::SUB => "sub",
+            Command::CMP => "cmp",
+            Command::JNZ => "jnz",
+            Command::JE => "je",
+            Command::JL => "jl",
+            Command::JLE => "jle",
+            Command::JB => "jb",
+            Command::JBE => "jbe",
+            Command::JP => "jp",
+            Command::JO => "jo",
+            Command::JS => "js",
+            Command::JNE => "jne",
+            Command::JNL => "jnl",
+            Command::JG => "jg",
+            Command::JNB => "jnb",
+            Command::JA => "ja",
+            Command::JNP => "jnp",
+            Command::JNO => "jno",
+            Command::JNS => "jns",
+            Command::LOOP => "loop",
+            Command::LOOPZ => "loopz",
+            Command::LOOPNZ => "loopnz",
+            Command::JCXZ => "jcxz",
+        })
+    }
+}
+
+pub trait Operand {}
+
+pub struct RegisterOp {
+    pub(crate) register: Register,
+}
+
+impl Operand for RegisterOp {}
+
+pub struct ImmediateOp {
+    pub(crate) value: u16,
+}
+
+impl Operand for ImmediateOp {}
+
+impl Into<Box<dyn CommandImpl>> for Instruction<RegisterOp, RegisterOp> {
+    fn into(self) -> Box<dyn CommandImpl> {
+        match self.command {
+            Command::MOV => Box::new(Mov::<RegisterOp, RegisterOp> {
+                instruction: self
+            }),
+            _ => unimplemented!()
+        }
+    }
+}
+
+impl Into<Box<dyn CommandImpl>> for Instruction<RegisterOp, ImmediateOp> {
+    fn into(self) -> Box<dyn CommandImpl> {
+        match self.command {
+            Command::MOV => Box::new(Mov::<RegisterOp, ImmediateOp> {
+                instruction: self
+            }),
+            _ => unimplemented!()
+        }
+    }
+}
+
+pub struct Instruction<T: Operand, E: Operand> {
+    pub(crate) command: Command,
+    pub(crate) op1: T,
+    pub(crate) op2: E,
+}
+
+#[derive(Clone, Copy)]
+pub enum Register {
+    AX, AL, AH,
+    BX, BL, BH,
+    CX, CL, CH,
+    DX, DL, DH,
+    BP,
+    SP,
+    DI,
+    SI,
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let reg_str = match self {
+            Register::AX => "ax",
+            Register::AL => "al",
+            Register::AH => "ah",
+            Register::BX => "bx",
+            Register::BL => "bl",
+            Register::BH => "bh",
+            Register::CX => "cx",
+            Register::CL => "cl",
+            Register::CH => "ch",
+            Register::DX => "dx",
+            Register::DL => "dl",
+            Register::DH => "dh",
+            Register::BP => "bp",
+            Register::SP => "sp",
+            Register::DI => "di",
+            Register::SI => "si",
+        };
+
+        write!(f, "{}", reg_str)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cpu_sim::CPU8086;
@@ -315,114 +441,5 @@ mod tests {
         let mut cpu = CPU8086::new();
         cpu.set_si(0x44);
         assert_eq!(cpu.si(), 0x44);
-    }
-}
-
-#[derive(Eq, PartialEq, Hash, Clone)]
-pub enum Command {
-    MOV, ADD, SUB, CMP,
-    JNZ, JE, JL, JLE, JB,
-    JBE, JP, JO, JS, JNE, JNL,
-    JG, JNB, JA, JNP, JNO, JNS,
-    LOOP, LOOPZ, LOOPNZ, JCXZ
-}
-
-impl Display for Command {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Command::MOV => "mov",
-            Command::ADD => "add",
-            Command::SUB => "sub",
-            Command::CMP => "cmp",
-            Command::JNZ => "jnz",
-            Command::JE => "je",
-            Command::JL => "jl",
-            Command::JLE => "jle",
-            Command::JB => "jb",
-            Command::JBE => "jbe",
-            Command::JP => "jp",
-            Command::JO => "jo",
-            Command::JS => "js",
-            Command::JNE => "jne",
-            Command::JNL => "jnl",
-            Command::JG => "jg",
-            Command::JNB => "jnb",
-            Command::JA => "ja",
-            Command::JNP => "jnp",
-            Command::JNO => "jno",
-            Command::JNS => "jns",
-            Command::LOOP => "loop",
-            Command::LOOPZ => "loopz",
-            Command::LOOPNZ => "loopnz",
-            Command::JCXZ => "jcxz",
-        })
-    }
-}
-
-pub trait Operand {}
-
-pub struct RegisterOp {
-    pub(crate) register: Register,
-}
-
-impl Operand for RegisterOp {}
-
-pub struct ImmediateOp {
-    pub(crate) value: u16,
-}
-
-impl Operand for ImmediateOp {}
-
-impl Into<Box<dyn CommandImpl>> for Instruction<RegisterOp, ImmediateOp> {
-    fn into(self) -> Box<dyn CommandImpl> {
-        match self.command {
-            Command::MOV => Box::new(Mov::<RegisterOp, ImmediateOp> {
-                instruction: self
-            }),
-            _ => unimplemented!()
-        }
-    }
-}
-
-pub struct Instruction<T: Operand, E: Operand> {
-    pub(crate) command: Command,
-    pub(crate) op1: T,
-    pub(crate) op2: E,
-}
-
-#[derive(Clone, Copy)]
-pub enum Register {
-    AX, AL, AH,
-    BX, BL, BH,
-    CX, CL, CH,
-    DX, DL, DH,
-    BP,
-    SP,
-    DI,
-    SI,
-}
-
-impl Display for Register {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let reg_str = match self {
-            Register::AX => "ax",
-            Register::AL => "al",
-            Register::AH => "ah",
-            Register::BX => "bx",
-            Register::BL => "bl",
-            Register::BH => "bh",
-            Register::CX => "cx",
-            Register::CL => "cl",
-            Register::CH => "ch",
-            Register::DX => "dx",
-            Register::DL => "dl",
-            Register::DH => "dh",
-            Register::BP => "bp",
-            Register::SP => "sp",
-            Register::DI => "di",
-            Register::SI => "si",
-        };
-
-        write!(f, "{}", reg_str)
     }
 }
