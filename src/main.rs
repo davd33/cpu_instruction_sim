@@ -11,13 +11,13 @@ fn print_usage(program: &str) {
 }
 
 #[derive(PartialEq)]
-enum AppCommand {
+enum AppMode {
     Simulation,
     Disassembly,
 }
 
 struct ProgramArgs {
-    command: AppCommand,
+    command: AppMode,
     file_path: String,
 }
 
@@ -26,14 +26,14 @@ fn parse_args() -> ProgramArgs {
 
     let program_name = args[0].clone();
     let file_path = args[1].clone();
-    let mut app_command: Option<AppCommand> = Some(AppCommand::Disassembly);
+    let mut app_command: Option<AppMode> = Some(AppMode::Disassembly);
     for i in 2..args.len() {
         match args[i].as_ref() {
             "--sim" => {
-                app_command = Some(AppCommand::Simulation);
+                app_command = Some(AppMode::Simulation);
             }
             "--dis" => {
-                app_command = Some(AppCommand::Disassembly);
+                app_command = Some(AppMode::Disassembly);
             }
             "--help" => {
                 print_usage(&program_name);
@@ -78,13 +78,14 @@ fn main() {
     if let Ok(asm_bytes) = fs::read(program_args.file_path.clone()) {
 
         let mut cpu: Option<CPU8086> = None;
-        if program_args.command == AppCommand::Simulation {
+        if program_args.command == AppMode::Simulation {
             cpu = Some(CPU8086::new());
         }
 
         let mut current = 0;
         while current < asm_bytes.len() {
             current = decode::process_instruction(
+                &program_args.command,
                 &asm_bytes,
                 current,
                 &mut cpu,

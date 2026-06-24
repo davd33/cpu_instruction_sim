@@ -243,6 +243,17 @@ pub struct Mov<T: Operand, E: Operand> {
     pub(crate) instruction: Instruction<T, E>
 }
 
+pub struct Add<T: Operand, E: Operand> {
+    pub(crate) instruction: Instruction<T, E>
+}
+
+impl CommandImpl for Add<RegisterOp, ImmediateOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op1.register, 
+            cpu.get(self.instruction.op1.register) + self.instruction.op2.value);
+    }
+}
+
 impl CommandImpl for Mov<RegisterOp, ImmediateOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
         cpu.set(self.instruction.op1.register, self.instruction.op2.value);

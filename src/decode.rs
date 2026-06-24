@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::process::exit;
 use crate::cpu_sim::{Command, CommandImpl, ImmediateOp, Instruction, Register, RegisterOp, CPU8086};
-use crate::{D16_MOD, D8_MOD, DIRECT_ADDRESS_MOD, MOD11};
+use crate::{AppMode, D8_MOD, D16_MOD, DIRECT_ADDRESS_MOD, MOD11};
 
 /// The returned table's keys encode a one byte value as follows:
 /// 0000 + W (1bit) + REG | R/M (3bits)
@@ -224,12 +224,14 @@ pub enum InstType {
     ToLabel,
 }
 
-pub fn process_instruction(asm_bytes: &Vec<u8>,
-                           current_byte: usize,
-                           cpu: &mut Option<CPU8086>,
-                           rg_table: &HashMap<u8, Register>,
-                           rg_mem_table: &HashMap<u8, String>,
-                           commands: &HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>>) -> usize {
+pub fn process_instruction(
+    app_mode: &AppMode,
+    asm_bytes: &Vec<u8>,
+    current_byte: usize,
+    cpu: &mut Option<CPU8086>,
+    rg_table: &HashMap<u8, Register>,
+    rg_mem_table: &HashMap<u8, String>,
+    commands: &HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>>) -> usize {
     
     let mut current: usize = current_byte;
     
@@ -256,26 +258,31 @@ pub fn process_instruction(asm_bytes: &Vec<u8>,
             let w = asm_bytes[current] & w_mask;
 
             let reg = &rg_table[&(w << 3 | reg)];
-            let reg2 = &rg_table[&(w << 3 | rm)];
+            let reg_m = &rg_table[&(w << 3 | rm)];
 
             if mod_ == MOD11 {
                 if d == 1 {
-                    println!("{} {}, {}", command, reg, reg2);
+                    println!("{} {}, {}", command, reg, reg_m);
 
-                    let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
-                        command: command.clone(),
-                        op1: RegisterOp { register: reg.clone() },
-                        op2: RegisterOp { register: reg2.clone() },
-                    }.into();
-                    cpu_exec(cpu, &mut mov_cmd);
+                    if app_mode == &AppMode::Simulation {
+                        let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
+                            command: command.clone(),
+                            op1: RegisterOp { register: reg_m.clone() },
+                            op2: RegisterOp { register: reg.clone() },
+                        }.into();
+                        cpu_exec(cpu, &mut mov_cmd);
+                    }
                 } else {
-                    println!("{} {}, {}", command, reg2, reg);
-                    let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
-                        command: command.clone(),
-                        op1: RegisterOp { register: reg.clone() },
-                        op2: RegisterOp { register: reg2.clone() },
-                    }.into();
-                    cpu_exec(cpu, &mut mov_cmd);
+                    println!("{} {}, {}", command, reg_m, reg);
+
+                    if app_mode == &AppMode::Simulation {
+                        let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
+                            command: command.clone(),
+                            op1: RegisterOp { register: reg.clone() },
+                            op2: RegisterOp { register: reg_m.clone() },
+                        }.into();
+                        cpu_exec(cpu, &mut mov_cmd);
+                    }
                 }
                 current += 2;
             } else if mod_ == DIRECT_ADDRESS_MOD && rm == 0x06 {
@@ -420,12 +427,15 @@ pub fn process_instruction(asm_bytes: &Vec<u8>,
             };
 
             println!("{} {}, {}", command, register, data);
-            let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
-                command: command.clone(),
-                op1: RegisterOp { register: register.clone() },
-                op2: ImmediateOp { value: data },
-            }.into();
-            cpu_exec(cpu, &mut mov_cmd);
+
+            if app_mode == &AppMode::Simulation {
+                let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
+                    command: command.clone(),
+                    op1: RegisterOp { register: register.clone() },
+                    op2: ImmediateOp { value: data },
+                }.into();
+                cpu_exec(cpu, &mut mov_cmd);
+            }
 
             current += if w == 1 { 3 } else { 2 };
         },
