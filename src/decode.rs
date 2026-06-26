@@ -186,13 +186,11 @@ pub fn get_commands_map() -> HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>> 
 pub fn which_command(byte1: u8, byte2: u8, commands: &HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>>) -> Option<(&InstType, &Command)> {
     for (k, v) in commands {
         for (inst_type, decoder) in v {
-            assert!(decoder.len() >= 1 && decoder.len() <= 2, "Instruction decoder must have 1, 2 elements.");
+            assert!(!decoder.is_empty() && decoder.len() <= 2, "Instruction decoder must have 1, 2 elements.");
             if let Some((mask, opcode)) = decoder.first() {
                 if decoder.len() == 2 {
-                    if let Some((mask2, opcode2)) = decoder.get(1) {
-                        if ((byte1 & mask) == *opcode) && ((byte2 & mask2) == *opcode2) {
-                            return Some((inst_type, k));
-                        }
+                    if let Some((mask2, opcode2)) = decoder.get(1) && ((byte1 & mask) == *opcode) && ((byte2 & mask2) == *opcode2) {
+                        return Some((inst_type, k));
                     }
                 } else {
                     if (byte1 & mask) == *opcode {
@@ -235,9 +233,9 @@ pub fn process_instruction(
     
     let mut current: usize = current_byte;
     
-    let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1], &commands) {
+    let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1], commands) {
         None => {
-            println!("No such instruction. {}", format_current_byte(&asm_bytes, current));
+            println!("No such instruction. {}", format_current_byte(asm_bytes, current));
             exit(1);
         }
         Some(cmd) => cmd
@@ -267,8 +265,8 @@ pub fn process_instruction(
                     if app_mode == &AppMode::Simulation {
                         let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
                             command: command.clone(),
-                            op1: RegisterOp { register: reg_m.clone() },
-                            op2: RegisterOp { register: reg.clone() },
+                            op1: RegisterOp { register: *reg_m },
+                            op2: RegisterOp { register: *reg },
                         }.into();
                         cpu_exec(cpu, &mut mov_cmd);
                     }
@@ -278,8 +276,8 @@ pub fn process_instruction(
                     if app_mode == &AppMode::Simulation {
                         let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
                             command: command.clone(),
-                            op1: RegisterOp { register: reg.clone() },
-                            op2: RegisterOp { register: reg_m.clone() },
+                            op1: RegisterOp { register: *reg },
+                            op2: RegisterOp { register: *reg_m },
                         }.into();
                         cpu_exec(cpu, &mut mov_cmd);
                     }
@@ -431,7 +429,7 @@ pub fn process_instruction(
             if app_mode == &AppMode::Simulation {
                 let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
                     command: command.clone(),
-                    op1: RegisterOp { register: register.clone() },
+                    op1: RegisterOp { register: *register },
                     op2: ImmediateOp { value: data },
                 }.into();
                 cpu_exec(cpu, &mut mov_cmd);
