@@ -243,6 +243,18 @@ pub struct Mov<T: Operand, E: Operand> {
     pub(crate) instruction: Instruction<T, E>
 }
 
+impl CommandImpl for Mov<RegisterOp, ImmediateOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op1.register, self.instruction.op2.value);
+    }
+}
+
+impl CommandImpl for Mov<RegisterOp, RegisterOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op2.register, cpu.get(self.instruction.op1.register));
+    }
+}
+
 pub struct Add<T: Operand, E: Operand> {
     pub(crate) instruction: Instruction<T, E>
 }
@@ -254,15 +266,46 @@ impl CommandImpl for Add<RegisterOp, ImmediateOp> {
     }
 }
 
-impl CommandImpl for Mov<RegisterOp, ImmediateOp> {
+impl CommandImpl for Add<RegisterOp, RegisterOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
-        cpu.set(self.instruction.op1.register, self.instruction.op2.value);
+        cpu.set(self.instruction.op1.register, 
+            cpu.get(self.instruction.op1.register) + cpu.get(self.instruction.op2.register));
     }
 }
 
-impl CommandImpl for Mov<RegisterOp, RegisterOp> {
+pub struct Sub<T: Operand, E: Operand> {
+    pub(crate) instruction: Instruction<T, E>
+}
+
+impl CommandImpl for Sub<RegisterOp, ImmediateOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
-        cpu.set(self.instruction.op2.register, cpu.get(self.instruction.op1.register));
+        cpu.set(self.instruction.op1.register, 
+            cpu.get(self.instruction.op1.register) - self.instruction.op2.value);
+    }
+}
+
+impl CommandImpl for Sub<RegisterOp, RegisterOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op2.register, 
+            cpu.get(self.instruction.op2.register) - cpu.get(self.instruction.op1.register));
+    }
+}
+
+pub struct Cmp<T: Operand, E: Operand> {
+    pub(crate) instruction: Instruction<T, E>
+}
+
+impl CommandImpl for Cmp<RegisterOp, ImmediateOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op1.register, 
+            cpu.get(self.instruction.op1.register) - self.instruction.op2.value);
+    }
+}
+
+impl CommandImpl for Cmp<RegisterOp, RegisterOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set(self.instruction.op2.register, 
+            cpu.get(self.instruction.op2.register) - cpu.get(self.instruction.op1.register));
     }
 }
 
@@ -321,24 +364,42 @@ pub struct ImmediateOp {
 
 impl Operand for ImmediateOp {}
 
-impl Into<Box<dyn CommandImpl>> for Instruction<RegisterOp, RegisterOp> {
-    fn into(self) -> Box<dyn CommandImpl> {
-        match self.command {
+impl From<Instruction<RegisterOp, RegisterOp>> for Box<dyn CommandImpl> {
+    fn from(val: Instruction<RegisterOp, RegisterOp>) -> Self {
+        match val.command {
             Command::MOV => Box::new(Mov::<RegisterOp, RegisterOp> {
-                instruction: self
+                instruction: val
             }),
-            _ => unimplemented!()
+            Command::ADD => Box::new(Add::<RegisterOp, RegisterOp> {
+                instruction: val
+            }),
+            Command::SUB => Box::new(Sub::<RegisterOp, RegisterOp> {
+                instruction: val
+            }),
+            Command::CMP => Box::new(Cmp::<RegisterOp, RegisterOp> {
+                instruction: val
+            }),
+            _ => unimplemented!("Reg/Reg")
         }
     }
 }
 
-impl Into<Box<dyn CommandImpl>> for Instruction<RegisterOp, ImmediateOp> {
-    fn into(self) -> Box<dyn CommandImpl> {
-        match self.command {
+impl From<Instruction<RegisterOp, ImmediateOp>> for Box<dyn CommandImpl> {
+    fn from(val: Instruction<RegisterOp, ImmediateOp>) -> Self {
+        match val.command {
             Command::MOV => Box::new(Mov::<RegisterOp, ImmediateOp> {
-                instruction: self
+                instruction: val
             }),
-            _ => unimplemented!()
+            Command::ADD => Box::new(Add::<RegisterOp, ImmediateOp> {
+                instruction: val
+            }),
+            Command::SUB => Box::new(Sub::<RegisterOp, ImmediateOp> {
+                instruction: val
+            }),
+            Command::CMP => Box::new(Cmp::<RegisterOp, ImmediateOp> {
+                instruction: val
+            }),
+            _ => unimplemented!("Immediate/Reg")
         }
     }
 }
