@@ -19,6 +19,7 @@ enum AppMode {
 struct ProgramArgs {
     command: AppMode,
     file_path: String,
+    debug: bool,
 }
 
 fn parse_args() -> ProgramArgs {
@@ -27,6 +28,7 @@ fn parse_args() -> ProgramArgs {
     let program_name = args[0].clone();
     let file_path = args[1].clone();
     let mut app_command: Option<AppMode> = Some(AppMode::Disassembly);
+    let mut debugging = false;
     for i in 2..args.len() {
         match args[i].as_ref() {
             "--sim" => {
@@ -39,6 +41,9 @@ fn parse_args() -> ProgramArgs {
                 print_usage(&program_name);
                 exit(0);
             }
+            "--debug" => {
+                debugging = true;
+            }
             _ => {
                 println!("Unknown command: {}", args[i]);
                 print_usage(&program_name);
@@ -48,7 +53,7 @@ fn parse_args() -> ProgramArgs {
     }
 
     if let Some(command) = app_command {
-        ProgramArgs { command, file_path }
+        ProgramArgs { command, file_path, debug: debugging }
     } else {
         println!("Could not find app command: {}", program_name);
         print_usage(&program_name);
@@ -86,6 +91,7 @@ fn main() {
         while current < asm_bytes.len() {
             current = decode::process_instruction(
                 &program_args.command,
+                program_args.debug,
                 &asm_bytes,
                 current,
                 &mut cpu,

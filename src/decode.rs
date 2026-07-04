@@ -224,6 +224,7 @@ pub enum InstType {
 
 pub fn process_instruction(
     app_mode: &AppMode,
+    debug: bool,
     asm_bytes: &Vec<u8>,
     current_byte: usize,
     cpu: &mut Option<CPU8086>,
@@ -240,6 +241,10 @@ pub fn process_instruction(
         }
         Some(cmd) => cmd
     };
+
+    if debug {
+        println!("{}", format_current_byte(asm_bytes, current));
+    }
 
     match inst_type {
         InstType::RegMem => {
