@@ -251,11 +251,13 @@ impl Display for CPU8086 {
             flags.push("SF");
         }
         if self.zero_flag {
-            flags.push("ZF");
+            flags.push("PZ");
         }
-        output = format!("{}\n   flags: {}", output, 
-            flags.iter().fold("".to_string(), 
-                |a, x| format!("{} {}", if !a.is_empty() { format!("{},", a) } else { a }, x)));
+        if !flags.is_empty() {
+            output = format!("{}\n   flags: {}", output, 
+                flags.iter().fold("".to_string(), 
+                    |a, x| format!("{}{}", if !a.is_empty() { format!("{}, ", a) } else { a }, x)));
+        }
 
         write!(f, "{}", output)
     }

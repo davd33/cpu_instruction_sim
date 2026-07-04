@@ -352,6 +352,8 @@ pub fn process_instruction(
             let has_d8 = mod_ == D8_MOD;
             let has_d16 = mod_ == D16_MOD || (mod_ == DIRECT_ADDRESS_MOD && rm == 6);
 
+            let mut inst: Option<Instruction<RegisterOp, ImmediateOp>> = None;
+
             let mut byte_inc = 2;
             let data_pos = 2 + if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
             let data = if mod_ == MOD11 && *command == Command::MOV {
@@ -367,12 +369,24 @@ pub fn process_instruction(
                     let word = if *command == Command::MOV { "word " } else { "" };
                     if s == 1 && *command != Command::MOV {
                         byte_inc += 1;
-                        format!("{}{}", word, d8_signed_extended(asm_bytes[current + data_pos]))
+                        let value = d8_signed_extended(asm_bytes[current + data_pos]);
+                        inst = Some(Instruction {
+                            command: command.clone(),
+                            op1: RegisterOp { register: rg_table[&((w << 3) ^ rm)] },
+                            op2: ImmediateOp { value: value as u16 },
+                        });
+                        format!("{}{}", word, value)
                     } else {
                         byte_inc += 2;
-                        format!("{}{}", word, d16_displacement(
+                        let value = d16_displacement(
                             asm_bytes[current + data_pos],
-                            asm_bytes[current + data_pos + 1]))
+                            asm_bytes[current + data_pos + 1]);
+                        inst = Some(Instruction {
+                            command: command.clone(),
+                            op1: RegisterOp { register: rg_table[&((w << 3) ^ rm)] },
+                            op2: ImmediateOp { value },
+                        });
+                        format!("{}{}", word, value)
                     }
                 }
             };
@@ -411,7 +425,12 @@ pub fn process_instruction(
                 ""
             };
 
-            println!("{} {}{}, {} ", command, addr_size, addr, data);
+            println!("{} {}{}, {}", command, addr_size, addr, data);
+
+            if app_mode == &AppMode::Simulation && mod_ == MOD11 && let Some(inst) = inst {
+                let mut mov_cmd: Box<dyn CommandImpl> = inst.into();
+                cpu_exec(cpu, &mut mov_cmd, debug);
+            }
 
             current += byte_inc;
         },
