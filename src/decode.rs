@@ -273,7 +273,7 @@ pub fn process_instruction(
                             op1: RegisterOp { register: *reg_m },
                             op2: RegisterOp { register: *reg },
                         }.into();
-                        cpu_exec(cpu, &mut mov_cmd);
+                        cpu_exec(cpu, &mut mov_cmd, debug);
                     }
                 } else {
                     println!("{} {}, {}", command, reg_m, reg);
@@ -284,7 +284,7 @@ pub fn process_instruction(
                             op1: RegisterOp { register: *reg },
                             op2: RegisterOp { register: *reg_m },
                         }.into();
-                        cpu_exec(cpu, &mut mov_cmd);
+                        cpu_exec(cpu, &mut mov_cmd, debug);
                     }
                 }
                 current += 2;
@@ -437,7 +437,7 @@ pub fn process_instruction(
                     op1: RegisterOp { register: *register },
                     op2: ImmediateOp { value: data },
                 }.into();
-                cpu_exec(cpu, &mut mov_cmd);
+                cpu_exec(cpu, &mut mov_cmd, debug);
             }
 
             current += if w == 1 { 3 } else { 2 };
@@ -480,8 +480,11 @@ pub fn process_instruction(
     current
 }
 
-fn cpu_exec(cpu: &mut Option<CPU8086>, cmd: &mut Box<dyn CommandImpl>) {
+fn cpu_exec(cpu: &mut Option<CPU8086>, cmd: &mut Box<dyn CommandImpl>, debug: bool) {
     if let Some(cpu) = cpu {
+        if debug {
+            cmd.debug(cpu);
+        }
         cmd.execute(cpu);
     }
 }
