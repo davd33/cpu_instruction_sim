@@ -42,3 +42,5 @@ export ASM_BINARY='asm/sim/immediate_movs'
 test_sim
 export ASM_BINARY='asm/sim/register_movs'
 test_sim
+export ASM_BINARY='asm/sim/add_sub_cmp'
+test_sim

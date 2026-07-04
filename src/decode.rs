@@ -354,7 +354,7 @@ pub fn process_instruction(
 
             let mut byte_inc = 2;
             let data_pos = 2 + if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
-            let data = if mod_ == MOD11 {
+            let data = if mod_ == MOD11 && *command == Command::MOV {
                 byte_inc += 1;
                 format!("{}", asm_bytes[current + data_pos])
             } else {
