@@ -1,0 +1,16 @@
+mov cx, 3
+mov bx, 1000
+add bx, 10
+sub cx, 1
+jne $-6
+add bx, 10
+sub cx, 1
+jne $-6
+add bx, 10
+sub cx, 1
+jne $-6
+
+Final registers:
+      bx: 0x0406 (1030)
+      ip: 0x000e (14)
+   flags: PZ
