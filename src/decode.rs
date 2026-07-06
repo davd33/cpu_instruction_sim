@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::process::exit;
 use crate::cpu_sim::{Command, CommandImpl, ImmediateOp, Instruction, Register, RegisterOp, CPU8086};
-use crate::{AppMode, D8_MOD, D16_MOD, DIRECT_ADDRESS_MOD, MOD11};
+use crate::{D8_MOD, D16_MOD, DIRECT_ADDRESS_MOD, MOD11};
 
 /// The returned table's keys encode a one byte value as follows:
 /// 0000 + W (1bit) + REG | R/M (3bits)
@@ -223,16 +223,15 @@ pub enum InstType {
 }
 
 pub fn process_instruction(
-    app_mode: &AppMode,
     debug: bool,
     asm_bytes: &Vec<u8>,
-    current_byte: usize,
-    cpu: &mut Option<CPU8086>,
+    cpu: &mut CPU8086,
     rg_table: &HashMap<u8, Register>,
     rg_mem_table: &HashMap<u8, String>,
-    commands: &HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>>) -> usize {
+    commands: &HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>>) -> Option<Box<dyn CommandImpl>> {
     
-    let mut current: usize = current_byte;
+    let current: usize = cpu.get_ip();
+    let mut result: Option<Box<dyn CommandImpl>> = None;
     
     let (inst_type, command) = match which_command(asm_bytes[current], asm_bytes[current + 1], commands) {
         None => {
@@ -267,33 +266,27 @@ pub fn process_instruction(
                 if d == 1 {
                     println!("{} {}, {}", command, reg, reg_m);
 
-                    if app_mode == &AppMode::Simulation {
-                        let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
-                            command: command.clone(),
-                            op1: RegisterOp { register: *reg_m },
-                            op2: RegisterOp { register: *reg },
-                        }.into();
-                        cpu_exec(cpu, &mut mov_cmd, debug);
-                    }
+                    result = Some(Instruction {
+                        command: command.clone(),
+                        op1: RegisterOp { register: *reg_m },
+                        op2: RegisterOp { register: *reg },
+                    }.into());
                 } else {
                     println!("{} {}, {}", command, reg_m, reg);
 
-                    if app_mode == &AppMode::Simulation {
-                        let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
-                            command: command.clone(),
-                            op1: RegisterOp { register: *reg },
-                            op2: RegisterOp { register: *reg_m },
-                        }.into();
-                        cpu_exec(cpu, &mut mov_cmd, debug);
-                    }
+                    result = Some(Instruction {
+                        command: command.clone(),
+                        op1: RegisterOp { register: *reg },
+                        op2: RegisterOp { register: *reg_m },
+                    }.into());
                 }
-                current += 2;
+                cpu.inc_ip(2);
             } else if mod_ == DIRECT_ADDRESS_MOD && rm == 0x06 {
                 // DIRECT ADDRESS
                 let disp: u16 = d16_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
                 println!("{} {}, [{}]", command, reg, disp);
-                current += 4;
+                cpu.inc_ip(4);
             } else if mod_ == D8_MOD {
                 let disp: i8 = asm_bytes[current + 2] as i8;
 
@@ -308,7 +301,7 @@ pub fn process_instruction(
                 } else {
                     println!("{} {}, {}", command, right, left);
                 }
-                current += 3;
+                cpu.inc_ip(3);
             } else if mod_ == D16_MOD {
                 let disp: i16 = d16_signed_displacement(asm_bytes[current + 2], asm_bytes[current + 3]);
 
@@ -323,7 +316,7 @@ pub fn process_instruction(
                 } else {
                     println!("{} {}, {}", command, right, left);
                 }
-                current += 4;
+                cpu.inc_ip(4);
             } else {
                 // no displacement
                 let left = format!("{}", reg);
@@ -335,7 +328,7 @@ pub fn process_instruction(
                     println!("{} {}, {}", command, right, left);
                 }
 
-                current += 2;
+                cpu.inc_ip(2);
             }
         },
         InstType::ImmediateRegMem => {
@@ -427,12 +420,11 @@ pub fn process_instruction(
 
             println!("{} {}{}, {}", command, addr_size, addr, data);
 
-            if app_mode == &AppMode::Simulation && mod_ == MOD11 && let Some(inst) = inst {
-                let mut mov_cmd: Box<dyn CommandImpl> = inst.into();
-                cpu_exec(cpu, &mut mov_cmd, debug);
+            if mod_ == MOD11 && let Some(inst) = inst {
+                result = Some(inst.into());
             }
 
-            current += byte_inc;
+            cpu.inc_ip(byte_inc);
         },
         InstType::ImmediateReg => {
             let w_mask = 0x08;
@@ -450,26 +442,23 @@ pub fn process_instruction(
 
             println!("{} {}, {}", command, register, data);
 
-            if app_mode == &AppMode::Simulation {
-                let mut mov_cmd: Box<dyn CommandImpl> = Instruction {
-                    command: command.clone(),
-                    op1: RegisterOp { register: *register },
-                    op2: ImmediateOp { value: data },
-                }.into();
-                cpu_exec(cpu, &mut mov_cmd, debug);
-            }
+            result = Some(Instruction {
+                command: command.clone(),
+                op1: RegisterOp { register: *register },
+                op2: ImmediateOp { value: data },
+            }.into());
 
-            current += if w == 1 { 3 } else { 2 };
+            cpu.inc_ip(if w == 1 { 3 } else { 2 });
         },
         InstType::MemAcc => {
             let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
             println!("{} ax, [{}]", command, disp);
-            current += 3;
+            cpu.inc_ip(3);
         },
         InstType::AccMem => {
             let disp: i16 = d16_signed_displacement(asm_bytes[current + 1], asm_bytes[current + 2]);
             println!("{} [{}], ax", command, disp);
-            current += 3;
+            cpu.inc_ip(3);
         },
         InstType::ImmediateToAcc => {
             let w_mask = 0x01;
@@ -486,24 +475,16 @@ pub fn process_instruction(
 
             println!("{} {}, {} ", command, reg, data);
 
-            current += if w == 1 { 3 } else { 2 };
+            cpu.inc_ip(if w == 1 { 3 } else { 2 });
         },
         InstType::ToLabel => {
             let jump = asm_bytes[current + 1] as i8;
             println!("{} ${:+}", command, jump + 2);
 
-            current += 2;
+            cpu.inc_ip(2);
         },
     }
     
-    current
+    result
 }
 
-fn cpu_exec(cpu: &mut Option<CPU8086>, cmd: &mut Box<dyn CommandImpl>, debug: bool) {
-    if let Some(cpu) = cpu {
-        if debug {
-            cmd.debug(cpu);
-        }
-        cmd.execute(cpu);
-    }
-}

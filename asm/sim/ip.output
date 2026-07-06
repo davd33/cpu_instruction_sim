@@ -1,0 +1,11 @@
+mov cx, 200
+mov bx, cx
+add cx, 1000
+mov bx, 2000
+sub cx, bx
+
+Final registers:
+      bx: 0x07d0 (2000)
+      cx: 0xfce0 (64736)
+      ip: 0x000e (14)
+   flags: S

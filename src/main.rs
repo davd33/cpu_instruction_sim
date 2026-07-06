@@ -6,6 +6,8 @@ use cpu_sim::{CPU8086};
 use cycles_stats::CyclesStat;
 use std::process::exit;
 use std::{env, fs};
+
+use crate::cpu_sim::CommandImpl;
 fn print_usage(program: &str) {
     println!("Usage: {} binary_path [--sim | --dis] [--help]", program);
 }
@@ -17,7 +19,7 @@ enum AppMode {
 }
 
 struct ProgramArgs {
-    command: AppMode,
+    mode: AppMode,
     file_path: String,
     debug: bool,
 }
@@ -53,7 +55,7 @@ fn parse_args() -> ProgramArgs {
     }
 
     if let Some(command) = app_command {
-        ProgramArgs { command, file_path, debug: debugging }
+        ProgramArgs { mode: command, file_path, debug: debugging }
     } else {
         println!("Could not find app command: {}", program_name);
         print_usage(&program_name);
@@ -82,25 +84,31 @@ fn main() {
 
     if let Ok(asm_bytes) = fs::read(program_args.file_path.clone()) {
 
-        let mut cpu: Option<CPU8086> = None;
-        if program_args.command == AppMode::Simulation {
-            cpu = Some(CPU8086::new());
-        }
+        let mut cpu: CPU8086 = CPU8086::new();
 
         let mut current = 0;
         while current < asm_bytes.len() {
-            current = decode::process_instruction(
-                &program_args.command,
+            let cpu_command: Option<Box<dyn CommandImpl>> = decode::process_instruction(
                 program_args.debug,
                 &asm_bytes,
-                current,
                 &mut cpu,
                 &decode::mod11_registers_table(),
                 &decode::reg_mem_registers_table(),
                 &decode::get_commands_map());
+
+            if program_args.mode == AppMode::Simulation && let Some(mut cpu_command) = cpu_command {
+                let old_cpu = cpu.clone();
+                cpu_command.execute(&mut cpu);
+                if program_args.debug {
+                    cpu_command.debug(&cpu, &old_cpu);
+                    println!();
+                }
+            }
+
+            current = cpu.get_ip();
         }
 
-        if let Some(cpu) = cpu {
+        if program_args.mode == AppMode::Simulation {
             println!("\nFinal registers:{}", cpu);
         }
     } else {

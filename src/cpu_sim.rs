@@ -1,7 +1,9 @@
 use std::fmt::{Display, Formatter};
 
+#[derive(Clone)]
 pub struct CPU8086 {
     regs: [u16; 8],
+    ip: usize,
     zero_flag: bool,
     sign_flag: bool,
     parity_flag: bool,
@@ -30,7 +32,34 @@ impl CPU8086 {
             zero_flag: false,
             sign_flag: false,
             parity_flag: false,
+            ip: 0,
         }
+    }
+
+    pub fn flags_string(&self) -> String {
+        let mut flags = String::new();
+        if self.sign_flag {
+            flags.push('S');
+        }
+        if self.parity_flag {
+            flags.push('P');
+        }
+        if self.zero_flag {
+            flags.push('Z');
+        }
+        flags
+    }
+
+    pub fn get_ip(&self) -> usize {
+        self.ip
+    }
+
+    pub fn set_ip(&mut self, val: usize) {
+        self.ip = val;
+    }
+
+    pub fn inc_ip(&mut self, delta: usize) {
+        self.ip += delta;
     }
 
     fn set_sign_flag(&mut self, val: i16) {
@@ -42,20 +71,19 @@ impl CPU8086 {
     }
 
     fn set_parity_flag(&mut self, val: u16) {
-        let hi: u8 = (val >> 8) as u8;
         let lo: u8 = (val & 0x00FF) as u8;
 
-        self.parity_flag = self.check_parity(hi) && self.check_parity(lo);
+        self.parity_flag = self.check_parity(lo);
     }
 
     fn check_parity(&self, val: u8) -> bool {
         let mut count_ones: u8 = 0;
         let masks: [u8; 8] = [
-            0x1, 0x2, 0x4, 0x8,
+            0x01, 0x02, 0x04, 0x08,
             0x10, 0x20, 0x40, 0x80,
         ];
         for mask in masks {
-            if val & mask == 1 {
+            if (val & mask) == mask {
                 count_ones += 1;
             }
         }
@@ -270,20 +298,10 @@ impl Display for CPU8086 {
             }
         }
 
-        let mut flags = vec![];
-        if self.sign_flag {
-            flags.push("S");
-        }
-        if self.parity_flag {
-            flags.push("P");
-        }
-        if self.zero_flag {
-            flags.push("Z");
-        }
-        if !flags.is_empty() {
-            output = format!("{}\n   flags: {}", output, 
-                flags.iter().fold("".to_string(), 
-                    |a, x| format!("{}{}", a, x)));
+        output = format!("{}\n      ip: 0x{:04x} ({})", output, self.ip, self.ip); 
+
+        if !self.flags_string().is_empty() {
+            output = format!("{}\n   flags: {}", output, self.flags_string());
         }
 
         write!(f, "{}", output)
@@ -292,7 +310,7 @@ impl Display for CPU8086 {
 
 pub trait CommandImpl {
     fn execute(&mut self, cpu: &mut CPU8086);
-    fn debug(&self, cpu: &CPU8086);
+    fn debug(&self, cpu: &CPU8086, cpu_old: &CPU8086);
 }
 
 pub struct Mov<T: Operand, E: Operand> {
@@ -304,8 +322,9 @@ impl CommandImpl for Mov<RegisterOp, ImmediateOp> {
         cpu.set(self.instruction.op1.register, self.instruction.op2.value);
     }
 
-    fn debug(&self, cpu: &CPU8086) {
+    fn debug(&self, cpu: &CPU8086, _cpu_old: &CPU8086) {
         println!("{} ({}) <- {}", self.instruction.op1.register, cpu.get(self.instruction.op1.register), self.instruction.op2.value);
+        println!("flags:->{}", cpu.flags_string())
     }
 }
 
@@ -314,9 +333,10 @@ impl CommandImpl for Mov<RegisterOp, RegisterOp> {
         cpu.set(self.instruction.op2.register, cpu.get(self.instruction.op1.register));
     }
 
-    fn debug(&self, cpu: &CPU8086) {
-        println!("{} ({}) <- {} ({})", self.instruction.op2.register, cpu.get(self.instruction.op2.register), 
-            self.instruction.op1.register, cpu.get(self.instruction.op1.register))
+    fn debug(&self, cpu: &CPU8086, _cpu_old: &CPU8086) {
+        println!("{} ({}) <- {}", self.instruction.op2.register, cpu.get(self.instruction.op2.register), 
+            self.instruction.op1.register);
+        println!("flags:->{}", cpu.flags_string());
     }
 }
 
@@ -327,32 +347,34 @@ pub struct Add<T: Operand, E: Operand> {
 impl CommandImpl for Add<RegisterOp, ImmediateOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
         let val = cpu.get(self.instruction.op1.register) + self.instruction.op2.value;
+        cpu.set(self.instruction.op1.register, val);
         cpu.set_zero_flag(val);
         cpu.set_sign_flag(val as i16);
         cpu.set_parity_flag(val);
-        cpu.set(self.instruction.op1.register, val);
     }
 
-    fn debug(&self, cpu: &CPU8086) {
+    fn debug(&self, cpu: &CPU8086, cpu_old: &CPU8086) {
         println!("{} ({}) <- {} ({}) + {}", self.instruction.op1.register , cpu.get(self.instruction.op1.register),
-            self.instruction.op1.register, cpu.get(self.instruction.op1.register), 
-            self.instruction.op2.value)
+            self.instruction.op1.register, cpu_old.get(self.instruction.op1.register), 
+            self.instruction.op2.value);
+        println!("flags:->{}", cpu.flags_string());
     }
 }
 
 impl CommandImpl for Add<RegisterOp, RegisterOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
         let val = cpu.get(self.instruction.op1.register) + cpu.get(self.instruction.op2.register);
+        cpu.set(self.instruction.op1.register, val);
         cpu.set_zero_flag(val);
         cpu.set_sign_flag(val as i16);
         cpu.set_parity_flag(val);
-        cpu.set(self.instruction.op1.register, val);
     }
 
-    fn debug(&self, cpu: &CPU8086) {
+    fn debug(&self, cpu: &CPU8086, cpu_old: &CPU8086) {
         println!("{} ({}) <- {} ({}) + {} ({})", self.instruction.op1.register, cpu.get(self.instruction.op1.register),
-            self.instruction.op1.register, cpu.get(self.instruction.op1.register),
-            self.instruction.op2.register, cpu.get(self.instruction.op2.register))
+            self.instruction.op1.register, cpu_old.get(self.instruction.op1.register),
+            self.instruction.op2.register, cpu_old.get(self.instruction.op2.register));
+        println!("flags:->{}", cpu.flags_string());
     }
 }
 
@@ -363,32 +385,34 @@ pub struct Sub<T: Operand, E: Operand> {
 impl CommandImpl for Sub<RegisterOp, ImmediateOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
         let val = cpu.get(self.instruction.op1.register) - self.instruction.op2.value;
+        cpu.set(self.instruction.op1.register, val);
         cpu.set_zero_flag(val);
         cpu.set_sign_flag(val as i16);
         cpu.set_parity_flag(val);
-        cpu.set(self.instruction.op1.register, val);
     }
 
-    fn debug(&self, cpu: &CPU8086) {
+    fn debug(&self, cpu: &CPU8086, cpu_old: &CPU8086) {
         println!("{} ({}) <- {} ({}) - {}", self.instruction.op1.register , cpu.get(self.instruction.op1.register),
-            self.instruction.op1.register, cpu.get(self.instruction.op1.register), 
-            self.instruction.op2.value)
+            self.instruction.op1.register, cpu_old.get(self.instruction.op1.register), 
+            self.instruction.op2.value);
+        println!("flags:->{}", cpu.flags_string());
     }
 }
 
 impl CommandImpl for Sub<RegisterOp, RegisterOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
         let val = cpu.get(self.instruction.op2.register) - cpu.get(self.instruction.op1.register);
+        cpu.set(self.instruction.op2.register, val);
         cpu.set_zero_flag(val);
         cpu.set_sign_flag(val as i16);
         cpu.set_parity_flag(val);
-        cpu.set(self.instruction.op2.register, val);
     }
 
-    fn debug(&self, cpu: &CPU8086) {
+    fn debug(&self, cpu: &CPU8086, cpu_old: &CPU8086) {
         println!("{} ({}) <- {} ({}) - {} ({})", self.instruction.op2.register, cpu.get(self.instruction.op2.register),
-            self.instruction.op2.register, cpu.get(self.instruction.op2.register),
-            self.instruction.op1.register, cpu.get(self.instruction.op1.register))
+            self.instruction.op2.register, cpu_old.get(self.instruction.op2.register),
+            self.instruction.op1.register, cpu_old.get(self.instruction.op1.register));
+        println!("flags:->{}", cpu.flags_string());
     }
 }
 
@@ -404,13 +428,14 @@ impl CommandImpl for Cmp<RegisterOp, ImmediateOp> {
         cpu.set_parity_flag(cmp);
     }
 
-    fn debug(&self, cpu: &CPU8086) {
+    fn debug(&self, cpu: &CPU8086, _cpu_old: &CPU8086) {
         let cmp: u16 = cpu.get(self.instruction.op1.register) - self.instruction.op2.value;
         let cmp: i16 = cmp as i16;
 
         println!("{} ({}) {} {}", self.instruction.op1.register, cpu.get(self.instruction.op1.register),
             if cmp < 0 { "<" } else { ">" },
-            self.instruction.op2.value)
+            self.instruction.op2.value);
+        println!("flags:->{}", cpu.flags_string());
     }
 }
 
@@ -422,13 +447,14 @@ impl CommandImpl for Cmp<RegisterOp, RegisterOp> {
         cpu.set_parity_flag(cmp);
     }
 
-    fn debug(&self, cpu: &CPU8086) {
+    fn debug(&self, cpu: &CPU8086, _cpu_old: &CPU8086) {
         let cmp: u16 = cpu.get(self.instruction.op2.register) - cpu.get(self.instruction.op1.register);
         let cmp: i16 = cmp as i16;
 
         println!("{} ({}) {} {} ({})", self.instruction.op2.register, cpu.get(self.instruction.op2.register),
             if cmp < 0 { "<" } else { ">" },
-            self.instruction.op1.register, cpu.get(self.instruction.op1.register))
+            self.instruction.op1.register, cpu.get(self.instruction.op1.register));
+        println!("flags:->{}", cpu.flags_string());
     }
 }
 

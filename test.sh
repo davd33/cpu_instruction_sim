@@ -2,7 +2,7 @@
 
 function test_asm() {
   echo "Test ${ASM_BINARY}..."
-  ./target/debug/cpu-instruction-sim "${ASM_BINARY}" > output.txt 2> /dev/null
+  ./target/release/cpu-instruction-sim "${ASM_BINARY}" > output.txt 2> /dev/null
 
   # Then compile output with NASM:
   nasm output.txt
@@ -13,7 +13,7 @@ function test_asm() {
 
 function test_sim() {
   echo "Test ${ASM_BINARY}..."
-  ./target/debug/cpu-instruction-sim "${ASM_BINARY}" --sim > output.txt 2> /dev/null
+  ./target/release/cpu-instruction-sim "${ASM_BINARY}" --sim > output.txt 2> /dev/null
 
   # Then compare with diff:
   diff output.txt "${ASM_BINARY}.output" && echo "OK" || echo "KO"
@@ -43,4 +43,6 @@ test_sim
 export ASM_BINARY='asm/sim/register_movs'
 test_sim
 export ASM_BINARY='asm/sim/add_sub_cmp'
+test_sim
+export ASM_BINARY='asm/sim/ip'
 test_sim
