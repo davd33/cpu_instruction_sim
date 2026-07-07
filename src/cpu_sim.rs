@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Clone)]
 pub struct CPU8086 {
     regs: [u16; 8],
+    memory: Vec<u8>,
     ip: usize,
     zero_flag: bool,
     sign_flag: bool,
@@ -19,8 +20,14 @@ pub struct CPU8086 {
 
 impl CPU8086 {
     pub(crate) fn new() -> Self {
+        let memory_size = 2usize.pow(16);
+        let mut mem_array: Vec<u8> = Vec::with_capacity(memory_size);
+        mem_array.fill(0);
+        eprintln!("Loading memory (size = {}) -- (not using segment registers)", memory_size);
+
         CPU8086 {
             regs: [0,0,0,0,0,0,0,0],
+            memory: mem_array,
             ax: 0,
             bx: 1,
             cx: 2,
@@ -135,6 +142,14 @@ impl CPU8086 {
             Register::DI => self.set_di(val),
             Register::SI => self.set_si(val),
         }
+    }
+
+    fn load_mem(&mut self, addr: u16, value: u16) {
+        let hi = (value >> 8) as u8;
+        let lo = (value & 0x00FF) as u8;
+
+        self.memory[addr as usize] = lo;
+        self.memory[(addr + 1) as usize] = hi;
     }
 
     fn set_bp(&mut self, val: u16) {
@@ -334,6 +349,15 @@ pub struct Mov<T: Operand, E: Operand> {
     pub(crate) instruction: Instruction<T, E>
 }
 
+impl CommandImpl for Mov<MemOp, ImmediateOp> {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.load_mem(self.instruction.op1.addr, self.instruction.op2.value);
+    }
+
+    fn debug(&self, _cpu: &CPU8086, _cpu_old: &CPU8086) {
+    }
+}
+
 impl CommandImpl for Mov<RegisterOp, ImmediateOp> {
     fn execute(&mut self, cpu: &mut CPU8086) {
         cpu.set(self.instruction.op1.register, self.instruction.op2.value);
@@ -516,6 +540,12 @@ impl Display for Command {
 }
 
 pub trait Operand {}
+
+pub struct MemOp {
+    pub(crate) addr: u16,
+}
+
+impl Operand for MemOp {}
 
 pub struct RegisterOp {
     pub(crate) register: Register,

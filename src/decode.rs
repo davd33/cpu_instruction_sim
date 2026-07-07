@@ -44,34 +44,34 @@ pub fn reg_mem_registers_table() -> HashMap<u8, String> {
     let mut table = HashMap::new();
 
     // MOD 00
-    table.insert(0x00, String::from("BX + SI"));
-    table.insert(0x01, String::from("BX + DI"));
-    table.insert(0x02, String::from("BP + SI"));
-    table.insert(0x03, String::from("BP + DI"));
-    table.insert(0x04, String::from("SI"));
-    table.insert(0x05, String::from("DI"));
+    table.insert(0x00, String::from("bx + si"));
+    table.insert(0x01, String::from("bx + di"));
+    table.insert(0x02, String::from("bp + si"));
+    table.insert(0x03, String::from("bp + di"));
+    table.insert(0x04, String::from("si"));
+    table.insert(0x05, String::from("di"));
     table.insert(0x06, String::from("DIRECT ADDRESS"));
-    table.insert(0x07, String::from("BX"));
+    table.insert(0x07, String::from("bx"));
 
     // MOD 01 + D8
-    table.insert(0x10, String::from("BX + SI"));
-    table.insert(0x11, String::from("BX + DI"));
-    table.insert(0x12, String::from("BP + SI"));
-    table.insert(0x13, String::from("BP + DI"));
-    table.insert(0x14, String::from("SI"));
-    table.insert(0x15, String::from("DI"));
-    table.insert(0x16, String::from("BP"));
-    table.insert(0x17, String::from("BX"));
+    table.insert(0x10, String::from("bx + si"));
+    table.insert(0x11, String::from("bx + di"));
+    table.insert(0x12, String::from("bp + si"));
+    table.insert(0x13, String::from("bp + di"));
+    table.insert(0x14, String::from("si"));
+    table.insert(0x15, String::from("di"));
+    table.insert(0x16, String::from("bp"));
+    table.insert(0x17, String::from("bx"));
 
     // MOD 02 + D16
-    table.insert(0x20, String::from("BX + SI"));
-    table.insert(0x21, String::from("BX + DI"));
-    table.insert(0x22, String::from("BP + SI"));
-    table.insert(0x23, String::from("BP + DI"));
-    table.insert(0x24, String::from("SI"));
-    table.insert(0x25, String::from("DI"));
-    table.insert(0x26, String::from("BP"));
-    table.insert(0x27, String::from("BX"));
+    table.insert(0x20, String::from("bx + si"));
+    table.insert(0x21, String::from("bx + di"));
+    table.insert(0x22, String::from("bp + si"));
+    table.insert(0x23, String::from("bp + di"));
+    table.insert(0x24, String::from("si"));
+    table.insert(0x25, String::from("di"));
+    table.insert(0x26, String::from("bp"));
+    table.insert(0x27, String::from("bx"));
 
     table
 }
@@ -346,6 +346,9 @@ pub fn process_instruction(
 
             let mut byte_inc = 2;
             let data_pos = 2 + if has_d8 { 1 } else if has_d16 { 2 } else { 0 };
+
+            // TODO needs to be a structure with { byte|word, value:u16|u8 } 
+            // data is for immediate values
             let data = if mod_ == MOD11 && *command == Command::MOV {
                 byte_inc += 1;
                 format!("{}", asm_bytes[current + data_pos])
@@ -417,6 +420,8 @@ pub fn process_instruction(
 
             println!("{} {}{}, {}", command, addr_size, addr, data);
 
+            // TODO here we need to have several cases for the various ways to construct instructions
+            // Reg/Immediate instruction | Mem|Immediate instruction
             if mod_ == MOD11 && let Some(inst) = inst {
                 result = Some(inst.into());
             }
@@ -424,6 +429,9 @@ pub fn process_instruction(
             cpu.inc_ip(byte_inc);
         },
         InstType::ImmediateReg => {
+            // In this case there is no displacement,
+            // so the instruction is very simple to construct.
+
             let w_mask = 0x08;
             let reg_mask = 0x07;
 
