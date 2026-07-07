@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::process::exit;
-use crate::cpu_sim::{Command, CommandImpl, ImmediateOp, Instruction, Register, RegisterOp, CPU8086};
+use crate::cpu_sim::{CPU8086, Command, CommandImpl, ImmediateOp, Instruction, Register, RegisterOp};
 use crate::{D8_MOD, D16_MOD, DIRECT_ADDRESS_MOD, MOD11};
 
 /// The returned table's keys encode a one byte value as follows:
@@ -143,9 +143,6 @@ pub fn get_commands_map() -> HashMap<Command, HashMap<InstType, Vec<(u8, u8)>>> 
     let mut insts = HashMap::new();
     insts.insert(InstType::ToLabel, vec![(0xFF, 0x78)]);
     commands.insert(Command::JS, insts);
-    let mut insts = HashMap::new();
-    insts.insert(InstType::ToLabel, vec![(0xFF, 0x75)]);
-    commands.insert(Command::JNE, insts);
     let mut insts = HashMap::new();
     insts.insert(InstType::ToLabel, vec![(0xFF, 0x7D)]);
     commands.insert(Command::JNL, insts);
@@ -480,6 +477,10 @@ pub fn process_instruction(
         InstType::ToLabel => {
             let jump = asm_bytes[current + 1] as i8;
             println!("{} ${:+}", command, jump + 2);
+
+            if !cpu.zero_flag() {
+                result = Some(jump.into());
+            }
 
             cpu.inc_ip(2);
         },

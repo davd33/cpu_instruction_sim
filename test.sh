@@ -20,7 +20,7 @@ function test_sim() {
 }
 
 # build executable
-cargo build
+cargo build --release
 
 # unit tests
 cargo test
@@ -45,4 +45,6 @@ test_sim
 export ASM_BINARY='asm/sim/add_sub_cmp'
 test_sim
 export ASM_BINARY='asm/sim/ip'
+test_sim
+export ASM_BINARY='asm/sim/conditional_jumps'
 test_sim

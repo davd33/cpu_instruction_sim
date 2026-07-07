@@ -76,6 +76,10 @@ impl CPU8086 {
         self.parity_flag = self.check_parity(lo);
     }
 
+    pub fn zero_flag(&self) -> bool {
+        self.zero_flag
+    }
+
     fn check_parity(&self, val: u8) -> bool {
         let mut count_ones: u8 = 0;
         let masks: [u8; 8] = [
@@ -313,6 +317,19 @@ pub trait CommandImpl {
     fn debug(&self, cpu: &CPU8086, cpu_old: &CPU8086);
 }
 
+pub struct Jnz {
+    pub(crate) bytes_offset: i8
+}
+
+impl CommandImpl for Jnz {
+    fn execute(&mut self, cpu: &mut CPU8086) {
+        cpu.set_ip(((cpu.get_ip() as i8) + self.bytes_offset) as usize);
+    }
+
+    fn debug(&self, _cpu: &CPU8086, _cpu_old: &CPU8086) {
+    }
+}
+
 pub struct Mov<T: Operand, E: Operand> {
     pub(crate) instruction: Instruction<T, E>
 }
@@ -462,7 +479,7 @@ impl CommandImpl for Cmp<RegisterOp, RegisterOp> {
 pub enum Command {
     MOV, ADD, SUB, CMP,
     JNZ, JE, JL, JLE, JB,
-    JBE, JP, JO, JS, JNE, JNL,
+    JBE, JP, JO, JS, JNL,
     JG, JNB, JA, JNP, JNO, JNS,
     LOOP, LOOPZ, LOOPNZ, JCXZ
 }
@@ -483,7 +500,6 @@ impl Display for Command {
             Command::JP => "jp",
             Command::JO => "jo",
             Command::JS => "js",
-            Command::JNE => "jne",
             Command::JNL => "jnl",
             Command::JG => "jg",
             Command::JNB => "jnb",
@@ -550,6 +566,14 @@ impl From<Instruction<RegisterOp, ImmediateOp>> for Box<dyn CommandImpl> {
             }),
             _ => unimplemented!("Immediate/Reg")
         }
+    }
+}
+
+impl From<i8> for Box<dyn CommandImpl> {
+    fn from(value: i8) -> Self {
+        Box::new(Jnz {
+            bytes_offset: value
+        })
     }
 }
 
